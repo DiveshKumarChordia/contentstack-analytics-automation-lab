@@ -89,11 +89,15 @@ async function periodicPhase() {
   //    and drives entry_deleted meter events. Runs first so the create step
   //    has headroom even when the org is near its cap.
   results.push(await runStep('delete old entries', 'delete-old-entries.mjs'))
-  // 2. Create new entries (this script also resolves __REF__ placeholders).
+  // 2. Create new entries in the master locale (resolves __REF__ placeholders).
   results.push(await runStep('periodic entries from manifest', 'periodic-entries-from-manifest.mjs'))
-  // 3. Bulk publish/unpublish a random sample (drives entry_published meters).
+  // 3. Localize the newest entries into non-master locales (fr-fr, de-de,
+  //    en-gb). Drives entry_created events keyed by the target locale —
+  //    the only way to give the dashboard's Locale filter axis real variation.
+  results.push(await runStep('localize entries', 'localize-entries.mjs'))
+  // 4. Bulk publish/unpublish a random sample (drives entry_published meters).
   results.push(await runStep('bulk publish cycle', 'bulk-publish-cycle.mjs'))
-  // 4. Workflow transitions on existing entries (drives entry_workflow_stage_*
+  // 5. Workflow transitions on existing entries (drives entry_workflow_stage_*
   //    meters). Running the workflow seeder in periodic mode re-uses idempotent
   //    workflow create (no-op when already present) and re-applies the
   //    transition policy to entries created since last run.

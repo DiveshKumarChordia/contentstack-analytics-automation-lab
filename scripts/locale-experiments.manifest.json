@@ -1,0 +1,51 @@
+{
+  "$comment": "Locale fallback-chain experiments. Each scenario creates a set of locales (idempotently) and entries within them, then optionally deletes locales in a specific order to test cma-api's behavior. Designed to drive variety on the metering pipeline (entry_created in non-master locales, entries_orphaned_by_locale_deleted on delete). NOT included in the periodic cron — opt-in via CONTENTSTACK_RUN_LOCALE_EXPERIMENTS=1.",
+  "scenarios": [
+    {
+      "id": "S1-three-level-chain",
+      "description": "Build a 3-level fallback chain: cs-cz → de-de → en-us. Create entries in each level. Don't delete — just exercise the create path.",
+      "locales": [
+        { "code": "cs-cz", "name": "Czech",  "fallbackLocale": "de-de" }
+      ],
+      "$comment-locales": "Assumes de-de already exists (created by seed-locales-branches). cs-cz creation expects de-de to exist as fallback.",
+      "entriesPerLocale": 3,
+      "deletePlan": []
+    },
+    {
+      "id": "S2-leaf-delete",
+      "description": "Create a leaf locale es-mx with fallback en-us; create entries; delete es-mx. Drives entries_orphaned_by_locale_deleted for the localized entries.",
+      "locales": [
+        { "code": "es-mx", "name": "Spanish - Mexico", "fallbackLocale": "en-us" }
+      ],
+      "entriesPerLocale": 5,
+      "deletePlan": [
+        { "code": "es-mx", "expectedResult": "ok", "$note": "Leaf delete should succeed; orphans the entries that only existed in es-mx" }
+      ]
+    },
+    {
+      "id": "S3-middle-delete-then-recreate",
+      "description": "Build chain it-it → en-us, populate, delete the leaf, then recreate. Tests that deleted-then-recreated locales come back empty.",
+      "locales": [
+        { "code": "it-it", "name": "Italian", "fallbackLocale": "en-us" }
+      ],
+      "entriesPerLocale": 3,
+      "deletePlan": [
+        { "code": "it-it", "expectedResult": "ok" }
+      ],
+      "recreateAfterDelete": true
+    },
+    {
+      "id": "S4-delete-fallback-first",
+      "description": "Build chain pt-pt → es-mx → en-us, populate at every level, then attempt to delete the MIDDLE locale (es-mx) while pt-pt still depends on it. Tests whether cma-api blocks this OR auto-reparents pt-pt's fallback to en-us. Empirical — outcome TBD.",
+      "locales": [
+        { "code": "es-mx",  "name": "Spanish - Mexico",      "fallbackLocale": "en-us" },
+        { "code": "pt-pt",  "name": "Portuguese - Portugal", "fallbackLocale": "es-mx" }
+      ],
+      "entriesPerLocale": 3,
+      "deletePlan": [
+        { "code": "es-mx", "expectedResult": "tbd", "$note": "Might 422 with 'locale has dependents' or might silently reparent pt-pt to en-us. Inspect the error body." },
+        { "code": "pt-pt", "expectedResult": "ok", "$note": "After the middle either delete or not, leaf should always delete cleanly" }
+      ]
+    }
+  ]
+}

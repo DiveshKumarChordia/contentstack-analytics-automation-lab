@@ -16,6 +16,8 @@
     "automate:locales-branches": "node --env-file=.env scripts/seed-locales-branches.mjs",
     "automate:bulk-publish": "node --env-file=.env scripts/bulk-publish-cycle.mjs",
     "automate:delete": "node --env-file=.env scripts/delete-old-entries.mjs",
+    "automate:localize": "node --env-file=.env scripts/localize-entries.mjs",
+    "automate:locale-experiments": "node --env-file=.env scripts/locale-experiments.mjs",
     "automate:drive": "node --env-file=.env scripts/drive-all.mjs",
     "automate:drive:bootstrap": "node --env-file=.env scripts/drive-all.mjs --mode bootstrap",
     "automate:drive:full": "node --env-file=.env scripts/drive-all.mjs --mode full",

@@ -575,6 +575,52 @@ export async function createLocale(base, headers, { code, name, fallbackLocale }
   return { ok: res.ok, status: res.status, body }
 }
 
+/**
+ * DELETE a locale by code. Triggers `entries_orphaned_by_locale_deleted`
+ * meter event for any entries that had localized values in this locale.
+ * Returns 422 if the locale is the master or has dependents — caller's
+ * responsibility to handle.
+ */
+export async function deleteLocale(base, headers, code) {
+  const url = `${base}/v3/locales/${encodeURIComponent(code)}`
+  const res = await fetch(url, { method: 'DELETE', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Localize an entry — i.e. create a localized version of an existing entry
+ * in a non-master locale. The endpoint is `PUT /entries/{uid}?locale={code}`
+ * with the translated field values. cma-api treats this as `entry_created`
+ * in the target locale's keyspace, so it drives the same meter as a
+ * regular create.
+ *
+ * @param fields  field values for the localized entry; must include `title`
+ *                if the content type marks title mandatory.
+ */
+export async function localizeEntry(base, headers, { contentTypeUid, entryUid, locale, fields }) {
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}?locale=${encodeURIComponent(locale)}`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ entry: fields }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * GET an entry across all locales it exists in. Useful for checking whether
+ * an entry is ALREADY localized to a given locale before trying to PUT a
+ * localized version (avoids the 422 "entry already localized" path).
+ */
+export async function getEntryLocales(base, headers, { contentTypeUid, entryUid }) {
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}/locales`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
 // =============================================================================
 // Branches
 // =============================================================================
