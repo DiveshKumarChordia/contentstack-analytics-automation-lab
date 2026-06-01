@@ -241,3 +241,461 @@ export async function createAndPublishEntry(
   }
   return { ok: true, entryUid, body: published.body }
 }
+
+// =============================================================================
+// Multi-token round-robin (Phase 2, multi-user simulation)
+// =============================================================================
+// Each cma-api request carries a user_uid derived from the management token's
+// owner. To make Active Users / Entries Per Author dashboards have variety, set
+// CONTENTSTACK_MANAGEMENT_TOKENS (plural, comma-separated) and the seeders will
+// round-robin across them. Falls back to the single CONTENTSTACK_MANAGEMENT_TOKEN
+// when the plural form is unset.
+export function loadManagementTokens() {
+  const multi = optionalEnv('CONTENTSTACK_MANAGEMENT_TOKENS')
+  if (multi) {
+    const tokens = multi
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+    if (tokens.length > 0) return tokens
+  }
+  const single = optionalEnv('CONTENTSTACK_MANAGEMENT_TOKEN')
+  if (single) return [single]
+  console.error(
+    'Missing management token: set CONTENTSTACK_MANAGEMENT_TOKEN or CONTENTSTACK_MANAGEMENT_TOKENS',
+  )
+  process.exit(1)
+}
+
+/** Build headers for one specific token — used inside round-robin loops. */
+export function headersForToken(apiKey, token, branch) {
+  return managementHeaders(apiKey, token, branch)
+}
+
+// =============================================================================
+// User-session auth (for workflow stage transitions)
+// =============================================================================
+// Per Contentstack docs, **management tokens cannot change workflow stages.**
+// That call requires a user authtoken (a logged-in user's session). We exchange
+// CONTENTSTACK_USER_EMAIL / CONTENTSTACK_USER_PASSWORD for an authtoken via
+// POST /v3/user-session, then use it on the transition endpoint.
+//
+// The authtoken header is `authtoken` (not `authorization`); api_key + branch
+// still go with the request as before.
+
+/**
+ * POST /v3/user-session to exchange email+password for a user authtoken.
+ * Returns { ok, status, authtoken, body }. The authtoken is good for
+ * subsequent CMA calls that require user-identity (e.g. workflow transit).
+ */
+export async function loginUserSession(base, apiKey, email, password, tfaToken) {
+  const headers = {
+    'Content-Type': 'application/json',
+    api_key: apiKey,
+  }
+  const payload = { user: { email, password } }
+  if (tfaToken) payload.user.tfa_token = tfaToken
+  const res = await fetch(`${base}/v3/user-session`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  const authtoken = body?.user?.authtoken
+  return { ok: res.ok && !!authtoken, status: res.status, authtoken, body }
+}
+
+/** Build request headers carrying a user authtoken (NOT a mgmt token). */
+export function userSessionHeaders(apiKey, authtoken, branch) {
+  const h = {
+    api_key: apiKey,
+    authtoken,
+    'Content-Type': 'application/json',
+  }
+  if (branch) h.branch = branch
+  return h
+}
+
+/**
+ * Convenience: build headers suitable for stage transitions by trying these
+ * env paths in order:
+ *
+ *   1. CONTENTSTACK_USER_AUTHTOKEN — use directly (long-lived authtoken
+ *      already obtained from a prior interactive login). Skips the login
+ *      flow entirely.
+ *
+ *   2. CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD +
+ *      CONTENTSTACK_USER_TOTP_SECRET — compute the TOTP code at request time
+ *      and log in via /v3/user-session. Works fully automated even with 2FA
+ *      enabled.
+ *
+ *   3. CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD only — log in
+ *      without 2FA. Fails (401) if the account has 2FA enabled.
+ *
+ *   4. CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD +
+ *      CONTENTSTACK_USER_TFA_TOKEN — log in with a manually-pasted 6-digit
+ *      TFA code. Will only work within the ~30s before that code expires;
+ *      mostly useful for one-off interactive runs.
+ *
+ * Returns null when nothing is configured, so callers can skip transition
+ * flows gracefully.
+ */
+export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
+  // Path 1: direct authtoken — bypass login
+  const directToken = optionalEnv('CONTENTSTACK_USER_AUTHTOKEN')
+  if (directToken) {
+    return userSessionHeaders(apiKey, directToken, branch)
+  }
+
+  const email = optionalEnv('CONTENTSTACK_USER_EMAIL')
+  const password = optionalEnv('CONTENTSTACK_USER_PASSWORD')
+  if (!email || !password) return null
+
+  // Path 2: TOTP at runtime — preferred for automation with 2FA enabled
+  const totpSecret = optionalEnv('CONTENTSTACK_USER_TOTP_SECRET')
+  let tfaToken = optionalEnv('CONTENTSTACK_USER_TFA_TOKEN') // Path 4 fallback
+  let usedTotp = false
+
+  if (totpSecret) {
+    const { totp, secondsUntilNextStep } = await import('./totp.mjs')
+    // If we're within the last second of the current step, the code we
+    // compute might roll over server-side mid-flight. Wait through the
+    // boundary before computing to keep latency-related drift bounded.
+    const remaining = secondsUntilNextStep()
+    if (remaining <= 1) {
+      await sleep((remaining + 0.2) * 1000)
+    }
+    tfaToken = totp(totpSecret)
+    usedTotp = true
+  }
+
+  const result = await loginUserSession(base, apiKey, email, password, tfaToken)
+  if (result.ok) {
+    return userSessionHeaders(apiKey, result.authtoken, branch)
+  }
+
+  // If the TOTP attempt failed AND it was very close to the rollover, the
+  // server may have advanced its window. Try once more with a freshly-computed
+  // code. Only do this for the TOTP path — manual TFA tokens shouldn't retry.
+  if (usedTotp && result.status === 401 && totpSecret) {
+    const { totp } = await import('./totp.mjs')
+    const fresh = totp(totpSecret)
+    if (fresh !== tfaToken) {
+      const retry = await loginUserSession(base, apiKey, email, password, fresh)
+      if (retry.ok) {
+        return userSessionHeaders(apiKey, retry.authtoken, branch)
+      }
+      console.warn(
+        `  ⚠ /v3/user-session login failed even after TOTP retry (${retry.status}): ${retry.body?.error_message || JSON.stringify(retry.body).slice(0, 200)}`,
+      )
+      return null
+    }
+  }
+
+  console.warn(
+    `  ⚠ /v3/user-session login failed (${result.status}): ${result.body?.error_message || JSON.stringify(result.body).slice(0, 200)}`,
+  )
+  return null
+}
+
+// =============================================================================
+// Workflows
+// =============================================================================
+// Stack-level mgmt token is sufficient. CMA emits two events on stage changes:
+//   entry_workflow_stage_added   — first time entry enters a workflow
+//   entry_workflow_stage_updated — every subsequent transit
+// (analytics-data-sync materializes these into entry_workflow_state snapshots.)
+
+export async function listWorkflows(base, headers, { limit = 100, includeCount = true } = {}) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  if (includeCount) params.set('include_count', 'true')
+  const url = `${base}/v3/workflows?${params.toString()}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** Returns the workflow object with matching name, or null. Case-sensitive match. */
+export async function findWorkflowByName(base, headers, name) {
+  const { ok, body } = await listWorkflows(base, headers)
+  if (!ok || !Array.isArray(body.workflows)) return null
+  return body.workflows.find((w) => w.name === name) ?? null
+}
+
+/**
+ * Create a workflow with the given stages and attach to content types.
+ *
+ * @param stages — Array of stage descriptors. Each: { uid?, name, color?, next? }.
+ *   `next` is an array of stage names (resolved to UIDs after assignment) or
+ *   the literal '$all' to allow transit to any other stage.
+ * @param contentTypes — Array of content_type UIDs the workflow attaches to.
+ */
+export async function createWorkflow(
+  base,
+  headers,
+  { name, contentTypes, stages, branches, adminUsers, adminRoles, enabled = true },
+) {
+  // cma-api workflow2.0 schema requires stage.uid to match ^[a-z0-9-]+$ —
+  // hyphens ONLY, no underscores. (services/workflow2.0/model/schema.js line 67-71)
+  const slug = (s) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+  const stagesWithUid = stages.map((s) => ({
+    ...s,
+    uid: s.uid || slug(s.name),
+  }))
+  // Build name → uid map so `next: ['Review']` can resolve to the stage UID.
+  const nameToUid = Object.fromEntries(stagesWithUid.map((s) => [s.name, s.uid]))
+  const resolvedStages = stagesWithUid.map((s, i) => {
+    const next = s.next ?? '$all'
+    let nextAvailable
+    if (next === '$all' || (Array.isArray(next) && next.includes('$all'))) {
+      nextAvailable = ['$all']
+    } else {
+      nextAvailable = (Array.isArray(next) ? next : [next]).map(
+        (n) => nameToUid[n] || n, // pass through if already a UID
+      )
+    }
+    const stage = {
+      uid: s.uid,
+      name: s.name,
+      color: s.color || ['#2196f3', '#4caf50', '#ff9800', '#9c27b0'][i % 4],
+      SYS_ACL: {
+        users: { uids: ['$all'], read: true, write: true, transit: true },
+        roles: { uids: [], read: true, write: true, transit: true },
+        others: { read: true, write: true, transit: false },
+      },
+      next_available_stages: nextAvailable,
+    }
+    // Only include description when set — schema enforces a min length so
+    // an empty string can fail validation.
+    if (s.description) stage.description = s.description
+    // entry_lock is gated by the "Workflow Stage Entry Locking" plan feature.
+    // If the stack's plan lacks it (cma-api returns code 337 on POST), even
+    // sending entry_lock:'none' is rejected. Only include it when the manifest
+    // explicitly opts in.
+    if (s.entry_lock) stage.entry_lock = s.entry_lock
+    return stage
+  })
+
+  // workflow2.0 schema requires branches to be a non-empty array
+  // (services/workflow2.0/model/schema.js lines 38-42, $require: true).
+  // Default to ["main"] when the manifest doesn't specify so the seeder works
+  // on both branches-enabled and branches-disabled stacks.
+  const effectiveBranches = (branches && branches.length > 0) ? branches : ['main']
+
+  const body = {
+    workflow: {
+      name,
+      enabled,
+      content_types: contentTypes,
+      branches: effectiveBranches,
+      workflow_stages: resolvedStages,
+      admin_users: {
+        users: adminUsers || [],
+        roles: adminRoles || [],
+      },
+    },
+  }
+
+  const res = await fetch(`${base}/v3/workflows`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+  const respBody = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body: respBody }
+}
+
+/**
+ * Transition an entry into a workflow stage. Emits entry_workflow_stage_added
+ * on first call (when entry has no current stage) and entry_workflow_stage_updated
+ * on subsequent calls. Locale matters — workflow state is per-(entry, locale).
+ */
+export async function transitionEntryWorkflow(
+  base,
+  headers,
+  { contentTypeUid, entryUid, stageUid, locale, dueDate, assignedTo, comment },
+) {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}/workflow${q}`
+  const payload = {
+    workflow: {
+      workflow_stage: {
+        uid: stageUid,
+        ...(dueDate ? { due_date: dueDate } : {}),
+        ...(assignedTo ? { assigned_to: assignedTo } : {}),
+        ...(comment ? { comment } : {}),
+      },
+    },
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// =============================================================================
+// Locales
+// =============================================================================
+// Stack-level mgmt token is sufficient. Creating a locale on a stack with
+// existing entries emits `entries_orphaned_by_locale_deleted` only on locale
+// DELETE; CREATE is silent from the metering side but exercises the
+// "Locale" filter axis in dashboards.
+
+export async function listLocales(base, headers) {
+  const url = `${base}/v3/locales`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+export async function localeExists(base, headers, code) {
+  const { ok, body } = await listLocales(base, headers)
+  if (!ok || !Array.isArray(body.locales)) return false
+  return body.locales.some((l) => l.code === code)
+}
+
+export async function createLocale(base, headers, { code, name, fallbackLocale }) {
+  const payload = { locale: { code } }
+  if (name) payload.locale.name = name
+  if (fallbackLocale) payload.locale.fallback_locale = fallbackLocale
+  const res = await fetch(`${base}/v3/locales`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// =============================================================================
+// Branches
+// =============================================================================
+// Stack-level mgmt token is sufficient. Branch creation is ASYNC — the POST
+// returns 201 with a notice, but the branch isn't usable until the bulk task
+// finishes. Caller should pollBranchReady() before using the new branch.
+
+export async function listBranches(base, headers) {
+  const url = `${base}/v3/stacks/branches`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+export async function branchExists(base, headers, uid) {
+  const { ok, body } = await listBranches(base, headers)
+  if (!ok || !Array.isArray(body.branches)) return false
+  return body.branches.some((b) => b.uid === uid)
+}
+
+/**
+ * Create a branch off `source`. Returns immediately; branch is ready when it
+ * appears in listBranches() — typically within a few seconds.
+ */
+export async function createBranch(base, headers, { uid, source = 'main' }) {
+  const res = await fetch(`${base}/v3/stacks/branches`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ branch: { uid, source } }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** Poll listBranches until `uid` shows up (or timeoutMs is hit). */
+export async function pollBranchReady(base, headers, uid, { timeoutMs = 60000, intervalMs = 2000 } = {}) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (await branchExists(base, headers, uid)) return true
+    await sleep(intervalMs)
+  }
+  return false
+}
+
+// =============================================================================
+// Bulk publish / unpublish
+// =============================================================================
+// Stack-level mgmt token is sufficient. CMA returns 201 with "request in
+// progress" — the actual publishing is enqueued. Watch for entry_published /
+// entry_unpublished meter events once the task drains (usually <1 min for
+// modest batches).
+
+/**
+ * Build the request body shape for /v3/bulk/publish and /v3/bulk/unpublish.
+ *
+ * Each entries[] item must be { uid, content_type, locale }. Callers may pass
+ * plain uid strings alongside a single contentTypeUid+locale via the
+ * `defaultContentType`/`defaultLocale` opts and we expand here.
+ */
+function buildBulkPublishBody({
+  entries,
+  assets,
+  locales,
+  environments,
+  scheduledAt,
+  defaultContentType,
+  defaultLocale,
+}) {
+  const body = {}
+  if (Array.isArray(entries) && entries.length > 0) {
+    body.entries = entries.map((e) => {
+      if (typeof e === 'string') {
+        return {
+          uid: e,
+          content_type: defaultContentType,
+          locale: defaultLocale,
+        }
+      }
+      return {
+        uid: e.uid,
+        content_type: e.content_type || e.contentType || defaultContentType,
+        locale: e.locale || defaultLocale,
+      }
+    })
+  }
+  if (Array.isArray(assets) && assets.length > 0) {
+    body.assets = assets.map((a) => (typeof a === 'string' ? { uid: a } : a))
+  }
+  if (locales) body.locales = locales
+  if (environments) body.environments = environments
+  if (scheduledAt) body.scheduled_at = scheduledAt
+  return body
+}
+
+export async function bulkPublish(base, headers, opts) {
+  const res = await fetch(`${base}/v3/bulk/publish`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(buildBulkPublishBody(opts)),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+export async function bulkUnpublish(base, headers, opts) {
+  const res = await fetch(`${base}/v3/bulk/unpublish`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(buildBulkPublishBody(opts)),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// =============================================================================
+// Delete entry — drives `entry_deleted` meter event.
+// =============================================================================
+export async function deleteEntry(base, headers, { contentTypeUid, entryUid, locale }) {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}${q}`
+  const res = await fetch(url, { method: 'DELETE', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}

@@ -2,9 +2,70 @@
 
 ## Overview
 
+### Original scripts (content types + entries)
+
 - **`npm run automate:manifest`** — Creates content types from [`scripts/content-types.manifest.json`](scripts/content-types.manifest.json) (if missing) and runs **seed** `entries`. Resolves `__REF__` and `__TAX_TERMS__` placeholders; records entry UIDs in memory in manifest order.
 - **`npm run automate:entries:periodic`** — **Does not** create content types. For each `contentTypes[]` item with `periodic.enabled`, creates `count` new entries (default **1**) from `periodic.entryTemplate` or the last seed entry, with a **unique** `title`. Resolves `__REF__` via the Management API (`first` / `latest` entry per referenced type).
-- **`npm run warm:launch-urls`** — Lists entries via the Delivery API, then **GET**s each corresponding Launch URL (`/#/entry/:contentTypeUid/:entryUid`, matching **HashRouter**). Env: **`LAUNCH_SITE_URL`**, Delivery host/token/API key, environment, optional **`VITE_CONTENTSTACK_CONTENT_TYPE_UIDS`**, optional **`LAUNCH_ENTRY_WARMUP_MAX`** (cap entry URLs). Skips gracefully if Launch URL or Delivery env is missing.
+- **`npm run warm:launch-urls`** — Lists entries via the Delivery API, then **GET**s each corresponding Launch URL.
+
+### New scripts (workflows, locales, branches, bulk publish)
+
+These extend coverage to the metering events the cma-api emits, so the downstream analytics dashboards (Workflow Health, Content Lifecycle, Team Adoption) get realistic data.
+
+- **`npm run automate:workflows`** — Reads [`scripts/workflows.manifest.json`](scripts/workflows.manifest.json). Creates workflows on the stack (idempotent — skips by name match), then drives entry stage transitions according to the manifest's `transitionPolicy`. Each transition emits an `entry_workflow_stage_added` (first time) or `entry_workflow_stage_updated` (subsequent) meter event.
+- **`npm run automate:locales-branches`** — Reads [`scripts/locales-branches.manifest.json`](scripts/locales-branches.manifest.json). Creates locales (`POST /v3/locales`) and branches (`POST /v3/stacks/branches`, async; polls until ready). Both idempotent — already-present items are skipped. Flags: `--dry-run`, `--only locales`, `--only branches`.
+- **`npm run automate:bulk-publish`** — Picks N random entries from the configured content types and bulk-publishes via `POST /v3/bulk/publish`, then bulk-unpublishes a smaller subset via `POST /v3/bulk/unpublish`. Drives `entry_published` / `entry_unpublished` meters that feed the Content Lifecycle dashboard's Created-vs-Published chart. Sample sizes and target locales/environments are env-tunable (see `.env.example`).
+- **`npm run automate:delete`** — Deletes entries older than N days (default 7) across the configured content types, with a per-run cap (default 50) and a keep-newest floor per content type (default 10). Drives `entry_deleted` meter events and keeps the org-level entry cap from blocking new creates. Runs first in `automate:drive --mode periodic`.
+
+### Orchestrator
+
+- **`npm run automate:drive`** — Single-entry orchestrator over all of the above. Runs each step as a child process so a single flaky step doesn't abort the cron. Three modes:
+  - `--mode periodic` (default): delete-old → create → bulk publish/unpublish → workflow transitions. Safe to call every 5 minutes via cron.
+  - `--mode bootstrap`: content-types → locales+branches → workflows (creation only). Idempotent setup; use on a fresh stack.
+  - `--mode full`: bootstrap then periodic in one go.
+
+  Shortcuts: `npm run automate:drive:bootstrap`, `npm run automate:drive:full`.
+
+### How to set up 2FA-enabled user-session auth (for workflow transitions)
+
+When `CONTENTSTACK_USER_TOTP_SECRET` is set, the seeder computes the rotating
+6-digit code at runtime using RFC 6238 — same algorithm Google Authenticator,
+Authy, and 1Password use. No npm dependencies are added; we use Node's
+built-in `crypto`.
+
+To obtain the secret:
+
+1. Log in to the Contentstack web UI and open **User Settings → Security → Two-Factor Authentication**.
+2. **Disable** 2FA if currently enabled.
+3. **Re-enable** 2FA. When the QR code appears, click **"Can't scan? Enter manually"** (or **"Show key"** — wording varies). This reveals the base32 secret — looks like `JBSWY3DPEHPK3PXP`, 16–32 chars, only `A–Z` and `2–7`.
+4. **Copy that secret** somewhere safe BEFORE completing the setup. Add it to your `.env` as:
+   ```
+   CONTENTSTACK_USER_TOTP_SECRET=JBSWY3DPEHPK3PXP
+   ```
+5. Continue 2FA setup as usual (enter the current code into Contentstack to verify, and also add the secret to your authenticator app so day-to-day login still works).
+
+**Alternative if you don't want to reset 2FA:** if you set up Contentstack 2FA via 1Password or Authy, those apps let you reveal the setup key:
+
+- **1Password**: open the entry → click the eye icon next to "One-Time Password" → look for "Setup key" in the details
+- **Authy**: long-press the Contentstack entry → "Show key"
+
+Either of those gives you the same base32 secret without resetting on Contentstack.
+
+**Don't have or want the TOTP secret?** Use the long-lived authtoken path instead — log in once via the UI, copy the `authtoken` cookie from DevTools, paste into `CONTENTSTACK_USER_AUTHTOKEN`. Refresh manually every few weeks when it expires.
+
+### Auth split — what each scope can do
+
+**Important:** Contentstack uses two distinct auth modes, and certain operations only work with one of them.
+
+| Operation | Mgmt token | User authtoken | Notes |
+|---|:---:|:---:|---|
+| Content types CRUD | ✅ | ✅ | `automate:manifest` uses mgmt token |
+| Entries CRUD (create / update / delete / publish / unpublish) | ✅ | ✅ | `automate:entry`, `automate:bulk-publish`, `automate:delete` |
+| Locales CRUD | ✅ | ✅ | `automate:locales-branches` |
+| Branches CRUD | ✅* | ✅ | * Plan-gated. If the stack's plan/token lacks Branches, you'll see a 401 — the seeder logs a warning and continues. |
+| Workflows: **create / read / update workflow definitions** | ✅ | ✅ | `automate:workflows` create phase uses mgmt token |
+| Workflows: **change an entry's stage** (transit) | ❌ | ✅ | Mgmt tokens are explicitly forbidden from stage changes per Contentstack docs. The transition phase logs in via `CONTENTSTACK_USER_EMAIL` + `CONTENTSTACK_USER_PASSWORD` (POST `/v3/user-session`) and uses the resulting authtoken. If those creds aren't set, the transition phase is skipped with a warning. |
+| Entry Locking on workflow stages | plan-gated | plan-gated | `entry_lock` is silently omitted by the seeder unless explicitly opted in via the manifest. Stacks without the "Workflow Stage Entry Locking" plan feature return code 337 even when sending `entry_lock:'none'`. |
 
 Requires **Node.js 20+** (`node --env-file=.env`).
 
@@ -70,6 +131,63 @@ Variables you **do not use** can be omitted. **`Recommended`** rows should match
 | `CONTENTSTACK_MANIFEST_SKIP_DUPLICATE_SEEDS` | Not `false`: skip duplicate seed titles and hydrate refs (see **Idempotency**) |
 | `CONTENTSTACK_AUTO_ENTRY_TITLE` | **`automate:entry`** title override |
 | `CONTENTSTACK_TAXONOMY_UID_*` / `CONTENTSTACK_TAXONOMY_TERMS_*` | Taxonomy shorthand / `__TAX_TERMS__` only (see **Taxonomy fields**) |
+| `CONTENTSTACK_MANAGEMENT_TOKENS` | **Plural**, comma-separated. Round-robin across multiple management tokens (one per user) so the metering pipeline sees multiple `user_uid`s. Fallback: single `CONTENTSTACK_MANAGEMENT_TOKEN`. |
+| `CONTENTSTACK_WORKFLOWS_MANIFEST_PATH` | Override path for `seed-workflows.mjs` |
+| `CONTENTSTACK_LOCALES_BRANCHES_MANIFEST_PATH` | Override path for `seed-locales-branches.mjs` |
+| `CONTENTSTACK_BULK_PUBLISH_CONTENT_TYPES` | CSV. Scope `bulk-publish-cycle.mjs` to these content types (else derived from content-types manifest) |
+| `CONTENTSTACK_BULK_PUBLISH_SAMPLE` / `CONTENTSTACK_BULK_UNPUBLISH_SAMPLE` | Entries to publish / unpublish per `bulk-publish-cycle.mjs` run (defaults 10 / 2) |
+| `CONTENTSTACK_BULK_PUBLISH_LOCALES` / `CONTENTSTACK_BULK_PUBLISH_ENVIRONMENTS` | CSV overrides for bulk-publish target locales / environments |
+
+## Extended manifests (workflows, locales, branches)
+
+### `scripts/workflows.manifest.json`
+
+```json
+{
+  "workflows": [
+    {
+      "name": "Editorial Review",
+      "enabled": true,
+      "contentTypes": ["demo_plain_text"],
+      "stages": [
+        { "name": "Draft",     "color": "#9c27b0", "next": ["In Review"] },
+        { "name": "In Review", "color": "#ff9800", "next": ["Approved", "Draft"] },
+        { "name": "Approved",  "color": "#4caf50", "next": ["$all"] }
+      ]
+    }
+  ],
+  "transitionPolicy": {
+    "enabled": true,
+    "perEntryMaxStages": 4,
+    "distribution": { "finish": 0.5, "stallMiddle": 0.3, "firstOnly": 0.2 }
+  }
+}
+```
+
+- **`stages[].uid`** — Optional; auto-derived from `name` as a slug if omitted.
+- **`stages[].next`** — Array of stage names or `"$all"`. The seeder resolves names to UIDs before posting.
+- **`transitionPolicy.distribution`** — How the seeder buckets existing entries:
+  - `finish` → walk through all stages to terminal (multi-transit; lots of audit log entries)
+  - `stallMiddle` → stop at a middle stage (drives "Stalled by Stage" KPI)
+  - `firstOnly` → assign first stage only (emits `entry_workflow_stage_added` but no `_updated`)
+- **`perEntryMaxStages`** — Cap on transitions per entry to avoid excessive API calls.
+
+### `scripts/locales-branches.manifest.json`
+
+```json
+{
+  "locales": [
+    { "code": "en-gb", "name": "English - UK", "fallbackLocale": "en-us" }
+  ],
+  "branches": [
+    { "uid": "develop", "source": "main" }
+  ]
+}
+```
+
+- Both arrays are independent — empty either to skip that step.
+- `fallbackLocale` must already exist on the stack at the time the new locale is created.
+- Branch creation is **async**. The seeder polls `listBranches` for up to 90s before declaring success.
 
 ## Front-end / Launch
 

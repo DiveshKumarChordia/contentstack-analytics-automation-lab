@@ -117,6 +117,16 @@ async function main() {
       )
       await sleep(300)
       if (!result.ok) {
+        // Org-level entry cap (error_code 133): plan limit, not a script bug.
+        // Stop adding more for this content type but exit 0 so the
+        // orchestrator's downstream steps (publishing, workflow transitions)
+        // still run on existing entries.
+        if (result.status === 422 && result.body?.error_code === 133) {
+          console.warn(
+            `Org entry cap reached for ${ct.uid} — skipping remaining periodic entries (code 133, non-fatal).`,
+          )
+          break
+        }
         console.error(
           `Periodic entry failed for ${ct.uid} (${result.step}):`,
           result.status,

@@ -1,0 +1,11 @@
+{
+  "$comment": "Locales + branches to ensure exist on the stack. Idempotent: any code/uid already present is skipped. fallbackLocale must point to a code that exists on the stack BEFORE this locale is created (defaults to master if omitted).",
+  "locales": [
+    { "code": "en-gb", "name": "English - United Kingdom", "fallbackLocale": "en-us" },
+    { "code": "fr-fr", "name": "French - France",          "fallbackLocale": "en-us" },
+    { "code": "de-de", "name": "German - Germany",         "fallbackLocale": "en-us" }
+  ],
+  "branches": [
+    { "uid": "develop", "source": "main" }
+  ]
+}

@@ -12,6 +12,14 @@
     "automate:manifest": "node --env-file=.env scripts/bootstrap-from-manifest.mjs",
     "automate:entries:periodic": "node --env-file=.env scripts/periodic-entries-from-manifest.mjs",
     "automate:entries:periodic:ci": "node scripts/periodic-entries-from-manifest.mjs",
+    "automate:workflows": "node --env-file=.env scripts/seed-workflows.mjs",
+    "automate:locales-branches": "node --env-file=.env scripts/seed-locales-branches.mjs",
+    "automate:bulk-publish": "node --env-file=.env scripts/bulk-publish-cycle.mjs",
+    "automate:delete": "node --env-file=.env scripts/delete-old-entries.mjs",
+    "automate:drive": "node --env-file=.env scripts/drive-all.mjs",
+    "automate:drive:bootstrap": "node --env-file=.env scripts/drive-all.mjs --mode bootstrap",
+    "automate:drive:full": "node --env-file=.env scripts/drive-all.mjs --mode full",
+    "automate:drive:ci": "node scripts/drive-all.mjs",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {

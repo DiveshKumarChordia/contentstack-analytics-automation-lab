@@ -174,6 +174,25 @@ async function main() {
           await sleep(200)
           continue
         }
+        // Org-level entry cap (error_code 133, "Max entries limit reached for
+        // your organization") is plan-level — not actionable from this script
+        // and not a code defect. Log and continue so the rest of the pipeline
+        // (workflows, publishing, transitions) still operates on existing
+        // entries. Hydrate the registry so __REF__ resolution still works.
+        if (result.status === 422 && result.body?.error_code === 133) {
+          console.warn(
+            `Org entry cap reached — skipping new seed for ${ct.uid} (code 133, non-fatal). Continuing with existing entries.`,
+          )
+          await hydrateRegistryFromStack(
+            base,
+            headers,
+            ct.uid,
+            locale,
+            registry,
+          )
+          await sleep(200)
+          continue
+        }
         console.error(
           `Entry failed for ${ct.uid} (${result.step}):`,
           result.status,

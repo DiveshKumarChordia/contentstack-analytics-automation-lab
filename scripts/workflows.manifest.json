@@ -1,0 +1,46 @@
+{
+  "$comment": "Workflows to create on the stack + transition policy for existing entries. The seeder is idempotent: a workflow whose `name` already exists is skipped (no update). Stage UIDs auto-derive from name (slug) unless explicitly set.",
+  "workflows": [
+    {
+      "name": "Editorial Review",
+      "enabled": true,
+      "contentTypes": ["demo_plain_text", "demo_json_rte"],
+      "stages": [
+        { "name": "Draft",    "color": "#9c27b0", "next": ["In Review"] },
+        { "name": "In Review", "color": "#ff9800", "next": ["Approved", "Draft"] },
+        { "name": "Approved", "color": "#4caf50", "next": ["$all"] }
+      ]
+    },
+    {
+      "name": "Marketing Approval",
+      "enabled": true,
+      "contentTypes": ["demo_reference", "demo_group"],
+      "stages": [
+        { "name": "Idea",            "color": "#2196f3", "next": ["Drafting"] },
+        { "name": "Drafting",        "color": "#9c27b0", "next": ["Legal Review", "Idea"] },
+        { "name": "Legal Review",    "color": "#ff5722", "next": ["Ready to Publish", "Drafting"] },
+        { "name": "Ready to Publish", "color": "#4caf50", "next": ["$all"] }
+      ]
+    },
+    {
+      "name": "Quick Publish",
+      "enabled": true,
+      "contentTypes": ["demo_blocks"],
+      "stages": [
+        { "name": "Working", "color": "#ff9800", "next": ["Done"] },
+        { "name": "Done",    "color": "#4caf50", "next": ["$all"] }
+      ]
+    }
+  ],
+  "$transitionPolicyComment": "After creating workflows, the seeder iterates entries in each workflow's content types and assigns stages. Distribution: 50% finish at terminal stage (Approved/Ready/Done), 30% sit at middle stage (drives 'Stalled by Stage'), 20% only enter first stage. Each transition is a separate API call so cma-api emits entry_workflow_stage_added on first + entry_workflow_stage_updated on each subsequent transit.",
+  "transitionPolicy": {
+    "enabled": true,
+    "perEntryMaxStages": 4,
+    "distribution": {
+      "finish": 0.5,
+      "stallMiddle": 0.3,
+      "firstOnly": 0.2
+    },
+    "stalledDelayDays": 7
+  }
+}

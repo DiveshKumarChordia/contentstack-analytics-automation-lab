@@ -32,6 +32,15 @@ on:
         description: 'GitHub Environment name to run only this instance (leave empty to run all from CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON)'
         required: false
         type: string
+      mode:
+        description: 'drive-all mode: periodic (default, recurring), bootstrap (one-time setup: content types/locales/branches/workflows), or full (bootstrap + periodic).'
+        required: false
+        default: 'periodic'
+        type: choice
+        options:
+          - periodic
+          - bootstrap
+          - full
 
 jobs:
   periodic:
@@ -63,11 +72,12 @@ jobs:
             exit 1
           fi
 
-      - name: Run periodic entry script
+      - name: Run drive-all orchestrator
         env:
           CONTENTSTACK_API_KEY: ${{ secrets.CONTENTSTACK_API_KEY || secrets.VITE_CONTENTSTACK_API_KEY }}
           VITE_CONTENTSTACK_API_KEY: ${{ secrets.VITE_CONTENTSTACK_API_KEY || secrets.CONTENTSTACK_API_KEY }}
           CONTENTSTACK_MANAGEMENT_TOKEN: ${{ secrets.CONTENTSTACK_MANAGEMENT_TOKEN }}
+          CONTENTSTACK_MANAGEMENT_TOKENS: ${{ secrets.CONTENTSTACK_MANAGEMENT_TOKENS }}
           CONTENTSTACK_MANAGEMENT_HOST: ${{ secrets.CONTENTSTACK_MANAGEMENT_HOST }}
           CONTENTSTACK_BRANCH: ${{ secrets.CONTENTSTACK_BRANCH }}
           CONTENTSTACK_LOCALE: ${{ secrets.CONTENTSTACK_LOCALE }}
@@ -75,7 +85,18 @@ jobs:
           VITE_CONTENTSTACK_ENVIRONMENT: ${{ secrets.VITE_CONTENTSTACK_ENVIRONMENT || secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT }}
           CONTENTSTACK_MANIFEST_PATH: ${{ secrets.CONTENTSTACK_MANIFEST_PATH || vars.CONTENTSTACK_MANIFEST_PATH }}
           CONTENTSTACK_PERIODIC_COUNT: ${{ secrets.CONTENTSTACK_PERIODIC_COUNT }}
-        run: npm run automate:entries:periodic:ci
+          CONTENTSTACK_BULK_PUBLISH_SAMPLE: ${{ secrets.CONTENTSTACK_BULK_PUBLISH_SAMPLE || vars.CONTENTSTACK_BULK_PUBLISH_SAMPLE }}
+          CONTENTSTACK_BULK_UNPUBLISH_SAMPLE: ${{ secrets.CONTENTSTACK_BULK_UNPUBLISH_SAMPLE || vars.CONTENTSTACK_BULK_UNPUBLISH_SAMPLE }}
+          CONTENTSTACK_BULK_PUBLISH_LOCALES: ${{ secrets.CONTENTSTACK_BULK_PUBLISH_LOCALES || vars.CONTENTSTACK_BULK_PUBLISH_LOCALES }}
+          CONTENTSTACK_BULK_PUBLISH_ENVIRONMENTS: ${{ secrets.CONTENTSTACK_BULK_PUBLISH_ENVIRONMENTS || vars.CONTENTSTACK_BULK_PUBLISH_ENVIRONMENTS }}
+          CONTENTSTACK_DELETE_OLDER_THAN_DAYS: ${{ secrets.CONTENTSTACK_DELETE_OLDER_THAN_DAYS || vars.CONTENTSTACK_DELETE_OLDER_THAN_DAYS }}
+          CONTENTSTACK_DELETE_MAX_PER_RUN: ${{ secrets.CONTENTSTACK_DELETE_MAX_PER_RUN || vars.CONTENTSTACK_DELETE_MAX_PER_RUN }}
+          CONTENTSTACK_DELETE_KEEP_NEWEST: ${{ secrets.CONTENTSTACK_DELETE_KEEP_NEWEST || vars.CONTENTSTACK_DELETE_KEEP_NEWEST }}
+          CONTENTSTACK_USER_AUTHTOKEN: ${{ secrets.CONTENTSTACK_USER_AUTHTOKEN }}
+          CONTENTSTACK_USER_EMAIL: ${{ secrets.CONTENTSTACK_USER_EMAIL }}
+          CONTENTSTACK_USER_PASSWORD: ${{ secrets.CONTENTSTACK_USER_PASSWORD }}
+          CONTENTSTACK_USER_TOTP_SECRET: ${{ secrets.CONTENTSTACK_USER_TOTP_SECRET }}
+        run: npm run automate:drive:ci -- --mode ${{ github.event.inputs.mode || 'periodic' }}
 
       - name: Warm Launch per-entry page URLs
         if: success()
