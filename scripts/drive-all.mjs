@@ -75,11 +75,13 @@ function runStep(name, script, extraArgs = []) {
 
 async function bootstrapPhase() {
   // Order matters: content types → locales → branches → workflows (which
-  // attaches to content types and so needs them present first).
+  // attaches to content types and so needs them present first) → publishing
+  // rules (need workflow uids + stage uids resolved).
   const results = []
   results.push(await runStep('content types from manifest', 'bootstrap-from-manifest.mjs'))
   results.push(await runStep('locales + branches',          'seed-locales-branches.mjs'))
   results.push(await runStep('workflows',                   'seed-workflows.mjs'))
+  results.push(await runStep('publishing rules',            'seed-publishing-rules.mjs'))
   return results
 }
 

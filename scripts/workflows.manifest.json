@@ -9,6 +9,12 @@
         { "name": "Draft",    "color": "#9c27b0", "next": ["In Review"] },
         { "name": "In Review", "color": "#ff9800", "next": ["Approved", "Draft"] },
         { "name": "Approved", "color": "#4caf50", "next": ["$all"] }
+      ],
+      "publishingRules": [
+        {
+          "$comment": "Auto-publish to the default environment when an entry hits the Approved stage. Approvers empty — no four-eye principle.",
+          "stage": "Approved"
+        }
       ]
     },
     {
@@ -20,6 +26,9 @@
         { "name": "Drafting",        "color": "#9c27b0", "next": ["Legal Review", "Idea"] },
         { "name": "Legal Review",    "color": "#ff5722", "next": ["Ready to Publish", "Drafting"] },
         { "name": "Ready to Publish", "color": "#4caf50", "next": ["$all"] }
+      ],
+      "publishingRules": [
+        { "stage": "Ready to Publish" }
       ]
     },
     {
@@ -29,6 +38,9 @@
       "stages": [
         { "name": "Working", "color": "#ff9800", "next": ["Done"] },
         { "name": "Done",    "color": "#4caf50", "next": ["$all"] }
+      ],
+      "publishingRules": [
+        { "stage": "Done" }
       ]
     }
   ],

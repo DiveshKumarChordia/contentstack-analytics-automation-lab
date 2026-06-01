@@ -542,6 +542,109 @@ export async function transitionEntryWorkflow(
 }
 
 // =============================================================================
+// Publishing rules (a.k.a. publish rules) — attached to a workflow stage
+// =============================================================================
+// A publishing rule says "when an entry is at workflow_stage S of workflow W,
+// once approved, auto-publish to environment E (in these locales, on these
+// branches)". The snapshot meter `entries_publish_rules` populated by
+// analytics-data-sync's cron counts how many entries fall under any rule —
+// drives the Workflow Health → Publishing Rules KPI.
+//
+// Endpoint: POST /v3/workflows/publishing_rules  (body wrapper: publishing_rule)
+// Token: stack-level CONTENTSTACK_MANAGEMENT_TOKEN authenticates as the token
+// owner (a system user); cma-api's requireSystemUser check accepts that.
+
+/** GET /v3/environments — list all environments on the stack. */
+export async function listEnvironments(base, headers, { limit = 100 } = {}) {
+  const url = `${base}/v3/environments?limit=${limit}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Resolve an environment name to its UID. Bulk-publish accepts names but
+ * publishing rules want UIDs, so callers that need a UID can route through
+ * this helper. Returns the UID string, or null if not found.
+ */
+export async function findEnvironmentUidByName(base, headers, name) {
+  const { ok, body } = await listEnvironments(base, headers)
+  if (!ok || !Array.isArray(body?.environments)) return null
+  const env = body.environments.find((e) => e.name === name || e.uid === name)
+  return env?.uid ?? null
+}
+
+export async function listPublishingRules(base, headers, { limit = 100, includeCount = true } = {}) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  if (includeCount) params.set('include_count', 'true')
+  const url = `${base}/v3/workflows/publishing_rules?${params.toString()}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Create a publishing rule. Required fields per cma-api schema:
+ *   - workflow (workflow uid) — the workflow this rule belongs to
+ *   - workflow_stage (stage uid) — which stage triggers the rule
+ *   - content_types (string[]) — min 1 — which CTs the rule applies to
+ *   - environment (string) — environment uid OR name
+ *   - branches (string[]) — usually ["main"]
+ *   - approvers (object) — { users: [], roles: [] } accepted as empty
+ *
+ * Optional:
+ *   - locales (string[]) — defaults stack-wide
+ *   - actions (any[]) — defaults []
+ *   - four_eye_principle_enabled / status / disable_approver_publishing
+ */
+export async function createPublishingRule(
+  base,
+  headers,
+  {
+    workflow,
+    workflow_stage,
+    content_types,
+    environment,
+    branches,
+    locales,
+    actions,
+    approvers,
+    four_eye_principle_enabled,
+    status,
+    disable_approver_publishing,
+  },
+) {
+  const payload = {
+    publishing_rule: {
+      workflow,
+      workflow_stage,
+      content_types,
+      environment,
+      branches: branches && branches.length > 0 ? branches : ['main'],
+      approvers: approvers || { users: [], roles: [] },
+      actions: actions || [],
+    },
+  }
+  if (locales) payload.publishing_rule.locales = locales
+  if (typeof four_eye_principle_enabled === 'boolean') {
+    payload.publishing_rule.four_eye_principle_enabled = four_eye_principle_enabled
+  }
+  if (typeof status === 'boolean') payload.publishing_rule.status = status
+  if (typeof disable_approver_publishing === 'boolean') {
+    payload.publishing_rule.disable_approver_publishing = disable_approver_publishing
+  }
+
+  const res = await fetch(`${base}/v3/workflows/publishing_rules`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// =============================================================================
 // Locales
 // =============================================================================
 // Stack-level mgmt token is sufficient. Creating a locale on a stack with
