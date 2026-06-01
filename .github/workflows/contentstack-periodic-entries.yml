@@ -47,6 +47,13 @@ jobs:
     name: Periodic (${{ matrix.instance }})
     runs-on: ubuntu-latest
     environment: ${{ matrix.instance }}
+    # If a previous run is still going when the next cron fires, queue and
+    # cancel-in-progress=false skips this fire so we don't double-create
+    # entries / double-transit on the same set. Per-instance group so two
+    # different GitHub Environments still run in parallel.
+    concurrency:
+      group: contentstack-periodic-${{ matrix.instance }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:

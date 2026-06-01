@@ -32,14 +32,16 @@
       ]
     }
   ],
-  "$transitionPolicyComment": "After creating workflows, the seeder iterates entries in each workflow's content types and assigns stages. Distribution: 50% finish at terminal stage (Approved/Ready/Done), 30% sit at middle stage (drives 'Stalled by Stage'), 20% only enter first stage. Each transition is a separate API call so cma-api emits entry_workflow_stage_added on first + entry_workflow_stage_updated on each subsequent transit.",
+  "$transitionPolicyComment": "After creating workflows, the seeder iterates entries in each workflow's content types and assigns stages. Each entry picks a walk PATTERN by weight: linear (full walk), skip (jump first→last), rework (back-and-forth), partialStall (stop at middle), firstOnly. Each transition is a separate API call. The legacy `distribution` shape (finish/stallMiddle/firstOnly) is auto-converted to `patterns` for backwards compat.",
   "transitionPolicy": {
     "enabled": true,
-    "perEntryMaxStages": 4,
-    "distribution": {
-      "finish": 0.5,
-      "stallMiddle": 0.3,
-      "firstOnly": 0.2
+    "perEntryMaxStages": 6,
+    "patterns": {
+      "linear": 0.30,
+      "skip": 0.15,
+      "rework": 0.15,
+      "partialStall": 0.25,
+      "firstOnly": 0.15
     },
     "stalledDelayDays": 7
   }

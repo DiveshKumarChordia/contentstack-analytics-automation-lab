@@ -42,6 +42,7 @@ import {
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
+import { createProgress } from './lib/progress.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -66,7 +67,7 @@ function deriveContentTypesFromManifest() {
 }
 
 async function deleteFromContentType(base, headers, ctUid, locale, opts) {
-  const { cutoffMs, perRunCap, keepNewest, remaining } = opts
+  const { cutoffMs, keepNewest, remaining } = opts
   const { ok, body } = await listEntries(base, headers, ctUid, {
     locale,
     limit: 100,
@@ -82,16 +83,31 @@ async function deleteFromContentType(base, headers, ctUid, locale, opts) {
     return { deleted: 0, scanned: entries.length, kept: entries.length }
   }
   const candidates = entries.slice(keepNewest) // older than the freshest N
+  // Filter to entries actually older than the cutoff before opening progress.
+  const eligible = candidates.filter((e) => {
+    const t = e.updated_at ? Date.parse(e.updated_at) : NaN
+    return Number.isFinite(t) && t < cutoffMs
+  })
+  const toDelete = eligible.slice(0, remaining)
+
+  if (toDelete.length === 0) {
+    console.log(`  ${ctUid}: scanned=${candidates.length} deleted=0 kept=${entries.length} (nothing older than cutoff)`)
+    return { deleted: 0, scanned: candidates.length, kept: entries.length }
+  }
+
+  console.log(`  ${ctUid}: ${candidates.length} candidates, ${toDelete.length} eligible to delete`)
+  const progress = createProgress({
+    label: `${ctUid} delete`,
+    total: toDelete.length,
+    everyN: 25,
+  })
 
   let deleted = 0
-  let scanned = candidates.length
-  for (const e of candidates) {
-    if (deleted >= remaining) break
-    const updated = e.updated_at ? Date.parse(e.updated_at) : NaN
-    if (!Number.isFinite(updated) || updated >= cutoffMs) continue // not old enough
+  for (const e of toDelete) {
     if (DRY_RUN) {
       console.log(`  [dry-run] DELETE ${ctUid}/${e.uid}  updated_at=${e.updated_at}`)
       deleted++
+      progress.tick({ ok: true })
       continue
     }
     const { ok: dOk, status, body: dBody } = await deleteEntry(base, headers, {
@@ -101,16 +117,18 @@ async function deleteFromContentType(base, headers, ctUid, locale, opts) {
     })
     if (dOk) {
       deleted++
+      progress.tick({ ok: true })
     } else {
       console.warn(
         `  ✗ ${ctUid}/${e.uid} delete failed (${status}): ${dBody?.error_message || JSON.stringify(dBody).slice(0, 160)}`,
       )
+      progress.tick({ ok: false })
     }
     await sleep(100) // light throttle — DELETE is heavier than read
   }
+  progress.done()
   const kept = entries.length - deleted
-  console.log(`  ${ctUid}: scanned=${scanned} deleted=${deleted} kept=${kept}`)
-  return { deleted, scanned, kept }
+  return { deleted, scanned: candidates.length, kept }
 }
 
 async function main() {

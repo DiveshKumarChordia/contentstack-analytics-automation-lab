@@ -36,8 +36,10 @@ import {
   createWorkflow,
   transitionEntryWorkflow,
   listEntries,
+  optionalEnv,
   sleep,
 } from './lib/cma.mjs'
+import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -45,14 +47,97 @@ const __dirname = dirname(__filename)
 const argv = process.argv.slice(2)
 const DRY_RUN = argv.includes('--dry-run')
 
-function pickStagePolicy(distribution, rng) {
-  const r = rng()
+/**
+ * Pick one key from a weighted distribution. Weights need not sum to 1.0 —
+ * we normalize implicitly by the cumulative-sum + total.
+ */
+function pickWeighted(distribution, rng) {
+  const entries = Object.entries(distribution)
+  const total = entries.reduce((a, [, w]) => a + w, 0)
+  if (total <= 0) return entries[0]?.[0]
+  const r = rng() * total
   let acc = 0
-  for (const [key, weight] of Object.entries(distribution)) {
-    acc += weight
+  for (const [key, w] of entries) {
+    acc += w
     if (r <= acc) return key
   }
-  return 'firstOnly'
+  return entries[entries.length - 1][0]
+}
+
+/**
+ * Given a workflow's ordered stage array and a "walk pattern" name, return
+ * a list of stage indices to step through in order. Repetitions are allowed
+ * (rework: 0→1→0→1→2). Out-of-range indices are clamped at workflow build
+ * time so callers always get a valid index list.
+ *
+ * Pattern semantics:
+ *   linear        — visit every stage in order (Draft→Review→Approved).
+ *                   Drives the most transitions per entry. Best for the
+ *                   "finish" bucket.
+ *   skip          — jump from first stage to last in one transit, simulating
+ *                   "approved on first review" or a fast-track entry.
+ *   rework        — Draft→Review→Draft→Review→Approved-ish, models the
+ *                   "needs revisions" workflow shape. Generates 2 extra
+ *                   transitions per entry vs. linear, and toggles the
+ *                   stage twice → "Stalled by Stage" picks this up.
+ *   partialStall  — walks to a middle stage and stops; the entry sits there.
+ *                   Direct driver for "Stalled by Stage" / "Audit Log".
+ *   firstOnly     — assigns first stage; emits entry_workflow_stage_added
+ *                   exactly once and never _updated.
+ */
+function planWalkIndices(stageCount, pattern) {
+  if (stageCount <= 0) return []
+  const last = stageCount - 1
+  const mid = Math.min(Math.max(1, Math.floor(stageCount / 2)), last)
+  switch (pattern) {
+    case 'linear':
+      return Array.from({ length: stageCount }, (_, i) => i)
+    case 'skip':
+      return stageCount >= 2 ? [0, last] : [0]
+    case 'rework': {
+      if (stageCount < 3) return [0, last]
+      // 0 → 1 → 0 → 1 → final
+      const seq = [0, 1, 0, 1]
+      if (last > 1) seq.push(last)
+      return seq
+    }
+    case 'partialStall':
+      return [0, mid]
+    case 'firstOnly':
+      return [0]
+    default:
+      return [0]
+  }
+}
+
+/** Manifest fallback distribution. Used when transitionPolicy.patterns is omitted. */
+const DEFAULT_PATTERN_WEIGHTS = {
+  linear: 0.30,
+  skip: 0.15,
+  rework: 0.15,
+  partialStall: 0.25,
+  firstOnly: 0.15,
+}
+
+/**
+ * Map the LEGACY 3-bucket distribution (finish/stallMiddle/firstOnly) to the
+ * new 5-pattern distribution so existing workflows.manifest.json files keep
+ * working. `finish` becomes `linear`; `stallMiddle` becomes `partialStall`;
+ * `firstOnly` stays. The new patterns (skip, rework) default to 0 weight.
+ */
+function resolvePatternWeights(transitionPolicy) {
+  if (transitionPolicy?.patterns) return transitionPolicy.patterns
+  if (transitionPolicy?.distribution) {
+    const d = transitionPolicy.distribution
+    return {
+      linear: d.finish ?? 0,
+      skip: 0,
+      rework: 0,
+      partialStall: d.stallMiddle ?? 0,
+      firstOnly: d.firstOnly ?? 0,
+    }
+  }
+  return DEFAULT_PATTERN_WEIGHTS
 }
 
 // Deterministic per-run RNG so re-running with the same content set produces
@@ -121,47 +206,72 @@ async function transitionEntriesForWorkflow(base, headers, transitHeaders, workf
     return { transitioned: 0, skipped: 0 }
   }
 
-  let transitioned = 0
-  let skipped = 0
+  const weights = resolvePatternWeights(policy)
+  const concurrency = parseInt(optionalEnv('CONTENTSTACK_TRANSITION_CONCURRENCY', '8'), 10)
+  const perCallSleepMs = parseInt(optionalEnv('CONTENTSTACK_TRANSITION_SLEEP_MS', '50'), 10)
+  const perEntryMax = policy.perEntryMaxStages ?? 99 // legacy cap
+  // Cap entries-per-CT-per-run so we don't waste API calls re-transitioning
+  // already-terminal entries. periodic-entries creates new ones each run, so
+  // capping + sorting by created_at desc keeps the seeder focused on fresh
+  // entries that genuinely need transitions. The `rework` pattern still hits
+  // older entries when picked (it walks back from terminal stages).
+  const maxEntriesPerCt = policy.maxEntriesPerCt
+    ?? parseInt(optionalEnv('CONTENTSTACK_TRANSITION_MAX_ENTRIES_PER_CT', '30'), 10)
 
+  // 1) Gather all (entry, ct, plannedStops) work items across this workflow's CTs.
+  const workItems = []
   for (const ctUid of manifestEntry.contentTypes) {
-    const { ok, body } = await listEntries(base, headers, ctUid, { locale, limit: 100 })
+    const { ok, body } = await listEntries(base, headers, ctUid, {
+      locale,
+      limit: maxEntriesPerCt,
+      desc: 'created_at', // freshest first → highest chance of meaningful transitions
+    })
     if (!ok) {
       console.warn(`    skipped ${ctUid} — list entries failed`)
       continue
     }
     const entries = body.entries || []
-    if (entries.length === 0) {
-      console.log(`    ${ctUid}: 0 entries to transition`)
-      continue
-    }
-
+    console.log(`    ${ctUid}: ${entries.length} entries (sampling ${maxEntriesPerCt} newest)`)
     for (const entry of entries) {
-      const choice = pickStagePolicy(policy.distribution, rng)
-      let stageIdx
-      if (choice === 'firstOnly') stageIdx = 0
-      else if (choice === 'stallMiddle') {
-        stageIdx = Math.min(Math.floor(stages.length / 2), stages.length - 1)
-      } else {
-        // finish — last terminal stage
-        stageIdx = stages.length - 1
-      }
-      // Walk up to perEntryMaxStages stages so we emit multiple transit events
-      // on entries that "finish" (drives the audit log + per-stage counts).
-      const stops = []
-      for (let i = 0; i <= stageIdx && i < policy.perEntryMaxStages; i++) {
-        stops.push(stages[i])
-      }
+      const pattern = pickWeighted(weights, rng)
+      const idxSequence = planWalkIndices(stages.length, pattern).slice(0, perEntryMax)
+      const stops = idxSequence.map((i) => stages[i])
+      if (stops.length === 0) continue
+      workItems.push({ ctUid, entry, stops, pattern })
+    }
+  }
 
+  if (workItems.length === 0) {
+    console.log(`    (no entries to transition)`)
+    return { transitioned: 0, skipped: 0 }
+  }
+
+  const totalTransitions = workItems.reduce((a, w) => a + w.stops.length, 0)
+  console.log(
+    `    plan: ${workItems.length} entries × avg ${(totalTransitions / workItems.length).toFixed(1)} stops = ${totalTransitions} transitions; concurrency=${concurrency}`,
+  )
+
+  let transitioned = 0
+  let skipped = 0
+  const progress = createProgress({
+    label: `${workflow.name} transit`,
+    total: totalTransitions,
+    everyN: 50,
+  })
+
+  // 2) Each work item (entry) runs serially through its stops; entries run in
+  //    a pool of N concurrent lanes. Serial-per-entry is REQUIRED — racing
+  //    two transit calls for the same entry confuses cma-api's stage state.
+  await runWithConcurrency(
+    workItems,
+    async ({ ctUid, entry, stops, pattern }) => {
       for (const stage of stops) {
         if (DRY_RUN) {
-          console.log(`    [dry-run] ${ctUid}/${entry.uid} → ${stage.name}`)
+          console.log(`    [dry-run] ${ctUid}/${entry.uid} (${pattern}) → ${stage.name}`)
           transitioned++
+          progress.tick({ ok: true })
           continue
         }
-        // Stage transitions REQUIRE a user authtoken (mgmt tokens are
-        // rejected at this endpoint). transitHeaders is built from
-        // CONTENTSTACK_USER_EMAIL/_PASSWORD via /v3/user-session.
         const { ok: tOk, status, body: tBody } = await transitionEntryWorkflow(
           base,
           transitHeaders,
@@ -174,23 +284,25 @@ async function transitionEntriesForWorkflow(base, headers, transitHeaders, workf
         )
         if (tOk) {
           transitioned++
+          progress.tick({ ok: true })
         } else {
-          // Common: 422 if the workflow doesn't accept the stage as next-from-current.
-          // Not fatal — it just means we hit a non-allowed transit; skip.
+          // 422 = transit not allowed from current stage. Common with the
+          // `rework` and `skip` patterns where the stage ACL doesn't allow
+          // certain jumps. Non-fatal — just record and continue.
           skipped++
+          progress.tick({ ok: false })
           if (status !== 422) {
             console.warn(
               `    ${ctUid}/${entry.uid} → ${stage.name} failed (${status}): ${tBody?.error_message || JSON.stringify(tBody).slice(0, 120)}`,
             )
           }
         }
-        // Light throttle so we don't blow past cma-api rate limits during a
-        // large transition pass.
-        await sleep(50)
+        if (perCallSleepMs > 0) await sleep(perCallSleepMs)
       }
-    }
-    console.log(`    ${ctUid}: ${entries.length} entries processed`)
-  }
+    },
+    { concurrency },
+  )
+  progress.done()
 
   return { transitioned, skipped }
 }
