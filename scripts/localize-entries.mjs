@@ -34,7 +34,6 @@ import {
   headersForToken,
   listEntries,
   localizeEntry,
-  getEntryLocales,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
@@ -92,29 +91,23 @@ async function localizeForContentType(base, headers, ctUid, targets, opts) {
     return { localized: 0, skipped: 0 }
   }
 
-  // Build work items: (entry × target locale) cross-product, but pre-filter
-  // entries that are ALREADY localized to the target so we don't try.
+  // Work items = full (entry × target locale) cross-product. We DON'T
+  // pre-check via getEntryLocales because that endpoint returns ALL stack
+  // locales with a `localized:true/false` flag, and parsing it correctly
+  // doubles the API call count. Instead, we issue the localizeEntry PUT
+  // and let cma-api's 422 "already localized" response be the natural
+  // idempotency signal. The progress logger counts those as fail=N so you
+  // can see the existing-vs-new ratio at a glance.
   const workItems = []
   for (const entry of entries) {
-    const { ok: locOk, body: locBody } = await getEntryLocales(base, headers, {
-      contentTypeUid: ctUid,
-      entryUid: entry.uid,
-    })
-    const existingLocales = new Set(
-      locOk ? (locBody?.locales || []).map((l) => l.code) : [],
-    )
     for (const target of targets) {
-      if (existingLocales.has(target)) continue // already localized → skip
       workItems.push({ entry, target })
     }
   }
 
-  if (workItems.length === 0) {
-    console.log(`  ${ctUid}: ${entries.length} entries — all already localized to targets`)
-    return { localized: 0, skipped: 0 }
-  }
-
-  console.log(`  ${ctUid}: ${entries.length} entries × ${targets.length} targets = ${workItems.length} localizations to perform`)
+  console.log(
+    `  ${ctUid}: ${entries.length} entries × ${targets.length} targets = ${workItems.length} localize attempts (422s on already-localized are expected)`,
+  )
 
   const progress = createProgress({
     label: `${ctUid} localize`,
