@@ -31,7 +31,6 @@ import {
   loadManagementTokens,
   headersForToken,
   tryLoadUserSessionHeaders,
-  listWorkflows,
   findWorkflowByName,
   createWorkflow,
   transitionEntryWorkflow,
@@ -41,84 +40,18 @@ import {
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import {
+  planWalkIndices,
+  DEFAULT_PATTERN_WEIGHTS,
+  pickWeighted,
+  mulberry32,
+} from './lib/workflow-patterns.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const argv = process.argv.slice(2)
 const DRY_RUN = argv.includes('--dry-run')
-
-/**
- * Pick one key from a weighted distribution. Weights need not sum to 1.0 —
- * we normalize implicitly by the cumulative-sum + total.
- */
-function pickWeighted(distribution, rng) {
-  const entries = Object.entries(distribution)
-  const total = entries.reduce((a, [, w]) => a + w, 0)
-  if (total <= 0) return entries[0]?.[0]
-  const r = rng() * total
-  let acc = 0
-  for (const [key, w] of entries) {
-    acc += w
-    if (r <= acc) return key
-  }
-  return entries[entries.length - 1][0]
-}
-
-/**
- * Given a workflow's ordered stage array and a "walk pattern" name, return
- * a list of stage indices to step through in order. Repetitions are allowed
- * (rework: 0→1→0→1→2). Out-of-range indices are clamped at workflow build
- * time so callers always get a valid index list.
- *
- * Pattern semantics:
- *   linear        — visit every stage in order (Draft→Review→Approved).
- *                   Drives the most transitions per entry. Best for the
- *                   "finish" bucket.
- *   skip          — jump from first stage to last in one transit, simulating
- *                   "approved on first review" or a fast-track entry.
- *   rework        — Draft→Review→Draft→Review→Approved-ish, models the
- *                   "needs revisions" workflow shape. Generates 2 extra
- *                   transitions per entry vs. linear, and toggles the
- *                   stage twice → "Stalled by Stage" picks this up.
- *   partialStall  — walks to a middle stage and stops; the entry sits there.
- *                   Direct driver for "Stalled by Stage" / "Audit Log".
- *   firstOnly     — assigns first stage; emits entry_workflow_stage_added
- *                   exactly once and never _updated.
- */
-function planWalkIndices(stageCount, pattern) {
-  if (stageCount <= 0) return []
-  const last = stageCount - 1
-  const mid = Math.min(Math.max(1, Math.floor(stageCount / 2)), last)
-  switch (pattern) {
-    case 'linear':
-      return Array.from({ length: stageCount }, (_, i) => i)
-    case 'skip':
-      return stageCount >= 2 ? [0, last] : [0]
-    case 'rework': {
-      if (stageCount < 3) return [0, last]
-      // 0 → 1 → 0 → 1 → final
-      const seq = [0, 1, 0, 1]
-      if (last > 1) seq.push(last)
-      return seq
-    }
-    case 'partialStall':
-      return [0, mid]
-    case 'firstOnly':
-      return [0]
-    default:
-      return [0]
-  }
-}
-
-/** Manifest fallback distribution. Used when transitionPolicy.patterns is omitted. */
-const DEFAULT_PATTERN_WEIGHTS = {
-  linear: 0.30,
-  skip: 0.15,
-  rework: 0.15,
-  partialStall: 0.25,
-  firstOnly: 0.15,
-}
 
 /**
  * Map the LEGACY 3-bucket distribution (finish/stallMiddle/firstOnly) to the
@@ -139,21 +72,6 @@ function resolvePatternWeights(transitionPolicy) {
     }
   }
   return DEFAULT_PATTERN_WEIGHTS
-}
-
-// Deterministic per-run RNG so re-running with the same content set produces
-// the same stage assignments (avoids drift between runs that would noisily
-// re-transit every entry).
-function mulberry32(seed) {
-  let a = seed >>> 0
-  return function () {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = a
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
 }
 
 /** Format a CMA error body for human reading — surfaces validation detail

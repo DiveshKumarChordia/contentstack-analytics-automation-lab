@@ -299,7 +299,7 @@ sequenceDiagram
     Drive->>CMA: bulk-publish-cycle → transition publish-set to approved stage (user session) → publish/unpublish a ratio of created
     Drive->>CMA: seed-workflows → stage transitions (user session)
     Drive->>CMA: churn-orphans → disable/detach · branch/locale/$all-wf lifecycle · entry delete→restore
-    Drive->>CMA: branch-lifecycle → 3-branch lineage (entries+locales) · workflow +branch/+CT · assigned-to transitions · multi-branch publish rule · teardown
+    Drive->>CMA: branch-lifecycle → 3-branch lineage (entries+locales) · workflow +branch/+CT · multi-branch publish rule · post-attach entries · all-pattern assigned-to transitions · publish→unpublish approved · teardown
   end
   Drive-->>Cron: summary (N/M steps ok)
 ```
@@ -318,7 +318,7 @@ sequenceDiagram
 | `bulk-publish-cycle.mjs` | **Transition publish-set to approved stage, then publish/unpublish a ratio of created** | mgmt + **user** | `POST /entries/{uid}/workflow`, `POST /bulk/publish\|unpublish` |
 | `delete-old-entries.mjs` | **Tiered retention** — trim oldest excess per age band (>30d→5k, 15-30d→10k, 7-15d→20k), concurrent | mgmt | `GET/DELETE /entries` |
 | `churn-orphans.mjs` | **Drive every orphaning mutation** | mgmt | `PUT/DELETE /workflows`, `DELETE /branches`, `DELETE /locales`, `PUT /entries/.../restore` |
-| `branch-lifecycle.mjs` | **Ephemeral 3-branch lineage** — entries+locales per branch, workflow +branch/+CT, dynamic CT, assigned-to transitions, multi-branch publish rule, then teardown | mgmt + **user** | `POST/DELETE /stacks/branches`, `POST/DELETE /content_types`, `PUT /workflows`, `POST/DELETE /publishing_rules`, `POST /entries/.../workflow` |
+| `branch-lifecycle.mjs` | **Ephemeral 3-branch lineage** — entries+locales per branch, workflow +branch/+CT, dynamic CT, multi-branch publish rule, **post-attach entries**, **all-pattern** assigned-to transitions, **publish→unpublish** of approved entries, then teardown | mgmt + **user** | `POST/DELETE /stacks/branches`, `POST/DELETE /content_types`, `PUT /workflows`, `POST/DELETE /publishing_rules`, `POST /entries/.../workflow`, `/publish`+`/unpublish` |
 | `drive-all.mjs` | Orchestrate bootstrap/periodic | inherits | spawns the above |
 
 ### Case → analytics-meter coverage

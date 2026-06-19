@@ -126,6 +126,7 @@ function computeAll(runs) {
       ['Branches created', fmt(sumK('branchesCreated'))],
       ['Branches deleted', fmt(sumK('branchesDeleted'))],
       ['Branch entries', fmt(sumK('branchEntries'))],
+      ['Post-attach entries', fmt(sumK('secondWaveEntries'))],
       ['Branch localizations', fmt(sumK('branchLocalized'))],
       ['Dynamic CTs created', fmt(sumK('dynCtCreated'))],
       ['Dynamic CT entries', fmt(sumK('dynCtEntries'))],

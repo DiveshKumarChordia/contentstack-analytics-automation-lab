@@ -157,6 +157,31 @@ export async function publishEntry(
   return { ok: res.ok, status: res.status, body }
 }
 
+/** Unpublish a single entry from an environment/locale (mirror of publishEntry). */
+export async function unpublishEntry(
+  base,
+  headers,
+  contentTypeUid,
+  entryUid,
+  locale,
+  publishEnv,
+) {
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}/unpublish`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      entry: {
+        environments: [publishEnv],
+        locales: [locale],
+      },
+      locale,
+    }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
 /**
  * List entries (Management API). Uses environment when provided to scope results.
  */

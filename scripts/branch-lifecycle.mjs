@@ -56,11 +56,21 @@ import {
   createPublishingRule,
   deletePublishingRule,
   transitionEntryWorkflow,
+  publishEntry,
+  unpublishEntry,
   tryLoadUserSessionHeaders,
   userSessionHeaders,
   getCurrentUser,
   optionalEnv,
+  sleep,
 } from './lib/cma.mjs'
+import {
+  planWalkIndices,
+  pickWeighted,
+  mulberry32,
+  DEFAULT_PATTERN_WEIGHTS,
+  isApprovedStageName,
+} from './lib/workflow-patterns.mjs'
 import { writeStepReport } from './lib/report.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -138,7 +148,8 @@ async function main() {
   const kpis = {
     branchesCreated: 0, branchEntries: 0, branchLocalized: 0,
     dynCtCreated: 0, dynCtEntries: 0, workflowBranchAdds: 0,
-    transitions: 0, publishRules: 0, branchesDeleted: 0, ctsDeleted: 0,
+    secondWaveEntries: 0, transitions: 0, published: 0, unpublished: 0,
+    publishRules: 0, branchesDeleted: 0, ctsDeleted: 0,
   }
 
   // ── PHASE 1+2: lineage of branches, each with entries + a locale combo ──────
@@ -241,36 +252,89 @@ async function main() {
 
     const refreshed = (await getWorkflow(base, mgmt(baseBranch), wf.uid)).body?.workflow || full
     const stages = refreshed.workflow_stages || []
-    const approved = stages.find((s) => ['Approved', 'Ready to Publish', 'Done'].includes(s.name)) || stages[stages.length - 1]
+    const approved = stages.find((s) => isApprovedStageName(s.name)) || stages[stages.length - 1]
+    const ruleCts = (newCts || []).filter((c) => c !== '$all')
 
-    // PHASE 5: transitions on the first lineage branch, assigned to the user
-    const ujh = userHeadersFor(lineage[0])
-    if (ujh && assignedTo && stages.length > 0) {
-      const { body: lb } = await listEntries(base, mgmt(lineage[0]), CT, { limit: 5 })
-      let n = 0
-      for (const e of lb?.entries || []) {
-        for (const st of stages) {
-          const t = await transitionEntryWorkflow(base, ujh, {
-            contentTypeUid: CT, entryUid: e.uid, stageUid: st.uid, locale,
-            assignedTo, comment: `auto: ${st.name}`,
-          })
-          if (t.ok) { kpis.transitions += 1; n += 1 }
-        }
-      }
-      record(`transitions on ${lineage[0]} (assigned_to ${assignedTo[0].email})`, n > 0, `${n} transitions`)
-    } else if (!ujh) {
-      record('transitions', false, 'no user session — skipped')
-    }
-
-    // PHASE 6: publishing rule across base + lineage branches
+    // PHASE 6: publishing rule across base + lineage branches — created BEFORE we
+    // publish so it governs the entries we create + transition next.
     if (approved) {
       const pr = await createPublishingRule(base, mgmt(baseBranch), {
         workflow: wf.uid, workflow_stage: approved.uid,
-        content_types: (newCts || []).filter((c) => c !== '$all').slice(0, 10) || [CT],
+        content_types: ruleCts.length ? ruleCts.slice(0, 10) : [CT],
         environment: publishEnv, branches: newBranches,
       })
       if (pr.ok) { ruleUid = pr.body?.publishing_rule?.uid; kpis.publishRules = 1 }
-      record(`publishing rule (${newBranches.length} branches @ ${approved.name})`, pr.ok, pr.ok ? '' : `${pr.status}: ${pr.body?.error_message || ''}`)
+      record(`publishing rule (${newBranches.length} branches @ ${approved?.name})`, pr.ok, pr.ok ? '' : `${pr.status}: ${pr.body?.error_message || ''}`)
+    }
+
+    // PHASE 4b: SECOND WAVE — entries created + localized AFTER the workflow + CT
+    // + branch + publish rule exist, so they're workflow-governed from birth.
+    const bh0 = mgmt(lineage[0])
+    const combo0 = localeComboFor(0, locales)
+    let secondWave = 0
+    for (let j = 0; j < entriesPerCt; j += 1) {
+      const title = uniqueTitle(`post-attach ${lineage[0]}`)
+      const e = await createEntry(base, bh0, CT, { title, single_line: `created after workflow attach on ${lineage[0]}` })
+      if (!e.ok) continue
+      secondWave += 1
+      kpis.secondWaveEntries += 1
+      for (const code of combo0) {
+        const lz = await localizeEntry(base, bh0, {
+          contentTypeUid: CT, entryUid: e.body?.entry?.uid, locale: code,
+          fields: { title: `[${code}] ${title}`, single_line: 'post-attach localized' },
+        })
+        if (lz.ok) kpis.branchLocalized += 1
+      }
+    }
+    record(`second-wave entries on ${lineage[0]} (workflow-governed)`, secondWave > 0, `${secondWave} entries, combo [${combo0.join(',') || 'none'}]`)
+
+    // PHASE 5: patterned stage transitions (linear / skip / rework / partialStall /
+    // firstOnly) on lineage[0] entries — both waves — assigned_to the acting user.
+    // Record which entries the walk leaves at the approved stage.
+    const ujh = userHeadersFor(lineage[0])
+    const reachedApproved = []
+    if (ujh && assignedTo && stages.length > 0) {
+      const seed = Number.parseInt(stamp.replace(/[^0-9]/g, '').slice(0, 9) || '1', 10) >>> 0
+      const rng = mulberry32(seed || 1)
+      const { body: lb } = await listEntries(base, mgmt(lineage[0]), CT, { limit: 20, desc: 'created_at' })
+      const patternCounts = {}
+      let n = 0
+      for (const e of lb?.entries || []) {
+        const pattern = pickWeighted(DEFAULT_PATTERN_WEIGHTS, rng)
+        patternCounts[pattern] = (patternCounts[pattern] || 0) + 1
+        const stops = planWalkIndices(stages.length, pattern).map((i) => stages[i]).filter(Boolean)
+        let landed = null
+        for (const st of stops) {
+          const t = await transitionEntryWorkflow(base, ujh, {
+            contentTypeUid: CT, entryUid: e.uid, stageUid: st.uid, locale,
+            assignedTo, comment: `auto:${pattern}:${st.name}`,
+          })
+          if (t.ok) { kpis.transitions += 1; n += 1; landed = st }
+        }
+        if (landed && isApprovedStageName(landed.name)) reachedApproved.push(e.uid)
+      }
+      const mix = Object.entries(patternCounts).map(([p, c]) => `${p}:${c}`).join(' ')
+      record(`patterned transitions on ${lineage[0]} (assigned_to ${assignedTo[0].email})`, n > 0, `${n} transitions [${mix}]`)
+    } else if (!ujh) {
+      record('transitions + publish/unpublish', false, 'no user session — skipped')
+    }
+
+    // PHASE 7a: publish → unpublish, one after another, for the entries the
+    // patterns walked to the approved stage (what the publish rule gates on).
+    // Publish all, let the async jobs drain, then unpublish every other one.
+    if (reachedApproved.length > 0) {
+      for (const uid of reachedApproved) {
+        const p = await publishEntry(base, bh0, CT, uid, locale, publishEnv)
+        if (p.ok) kpis.published += 1
+        await sleep(150)
+      }
+      await sleep(2000) // let publish jobs start draining before unpublishing
+      for (let i = 0; i < reachedApproved.length; i += 2) {
+        const u = await unpublishEntry(base, bh0, CT, reachedApproved[i], locale, publishEnv)
+        if (u.ok) kpis.unpublished += 1
+        await sleep(150)
+      }
+      record(`publish→unpublish on ${lineage[0]}`, kpis.published > 0, `${kpis.published} published, ${kpis.unpublished} unpublished (of ${reachedApproved.length} approved)`)
     }
   } else if (!DRY_RUN && lineage.length > 0) {
     record(`workflow "${wfName}"`, false, 'not found — skipped workflow/CT/transition/rule phases')
