@@ -329,12 +329,17 @@ async function main() {
         await sleep(150)
       }
       await sleep(2000) // let publish jobs start draining before unpublishing
-      for (let i = 0; i < reachedApproved.length; i += 2) {
+      // Unpublish only a MINORITY so most approved entries stay published
+      // (CONTENTSTACK_BRANCH_UNPUBLISH_FRACTION, default 1/3).
+      const fracRaw = Number(optionalEnv('CONTENTSTACK_BRANCH_UNPUBLISH_FRACTION'))
+      const unpubFrac = Number.isFinite(fracRaw) && fracRaw >= 0 && fracRaw <= 1 ? fracRaw : 1 / 3
+      const unpubCount = Math.round(reachedApproved.length * unpubFrac)
+      for (let i = 0; i < unpubCount; i += 1) {
         const u = await unpublishEntry(base, bh0, CT, reachedApproved[i], locale, publishEnv)
         if (u.ok) kpis.unpublished += 1
         await sleep(150)
       }
-      record(`publish→unpublish on ${lineage[0]}`, kpis.published > 0, `${kpis.published} published, ${kpis.unpublished} unpublished (of ${reachedApproved.length} approved)`)
+      record(`publish→unpublish on ${lineage[0]}`, kpis.published > 0, `${kpis.published} published, ${kpis.unpublished} unpublished (of ${reachedApproved.length} approved, kept ${kpis.published - kpis.unpublished})`)
     }
   } else if (!DRY_RUN && lineage.length > 0) {
     record(`workflow "${wfName}"`, false, 'not found — skipped workflow/CT/transition/rule phases')
