@@ -218,7 +218,12 @@ async function main() {
     planned: totalL + totalF,
     actual: totalL,
     failed: totalF,
-    kpis: { localized: totalL, already: totalA, failed: totalF },
+    kpis: {
+      localized: totalL,
+      already: totalA,
+      localizeFailed: totalF,
+      localeTargets: targets.length,
+    },
   })
   // Surface real failures (previously hidden as "skipped"): non-zero exit makes
   // drive-all flag this step so the genuine error is visible in the run summary.

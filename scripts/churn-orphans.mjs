@@ -226,11 +226,23 @@ async function main() {
 
   const failed = results.filter((r) => !r.ok).length
   console.log(`\n✓ churn done — ${results.length - failed}/${results.length} cases ok`)
+  // Per-case KPIs: 1 when that orphan case ran ok this run (feeds coverage +
+  // the "branches/locales/workflows churned" dashboard metrics).
+  const caseKey = {
+    'disable→enable': 'churnDisable',
+    'detach→reattach CT': 'churnDetach',
+    'branch create→delete': 'churnBranch',
+    'locale create→delete': 'churnLocale',
+    '$all workflow create→delete': 'churnAllWf',
+    'entry delete→restore': 'churnRestore',
+  }
+  const kpis = { casesOk: results.length - failed, casesFailed: failed }
+  for (const r of results) if (r.ok && caseKey[r.name]) kpis[caseKey[r.name]] = 1
   writeStepReport({
     planned: results.length,
     actual: results.length - failed,
     failed,
-    kpis: { casesOk: results.length - failed, casesFailed: failed },
+    kpis,
     errors: results
       .filter((r) => !r.ok)
       .map((r) => ({ label: r.name, message: r.note || 'failed' })),

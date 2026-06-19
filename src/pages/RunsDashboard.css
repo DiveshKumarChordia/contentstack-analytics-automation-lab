@@ -46,6 +46,31 @@
 .kpi__label { color: var(--muted); font-size: 0.82rem; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
 .kpi--bad .kpi__value { color: var(--bad); }
 
+/* Grouped KPI sections (~50 metrics) */
+.kgroup { margin-bottom: 22px; }
+.kgroup__title {
+  font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin: 0 0 10px; padding-left: 2px;
+}
+.kgroup__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.stat {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.stat__value { font-size: 1.35rem; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+.stat__label { color: var(--muted); font-size: 0.74rem; margin-top: 5px; }
+.stat--ok { border-left-color: var(--ok); }
+.stat--warn { border-left-color: var(--warn); }
+.stat--bad { border-left-color: var(--bad); }
+.stat--bad .stat__value { color: var(--bad); }
+
 /* Panels */
 .runs__panel {
   background: var(--card);

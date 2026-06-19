@@ -39,6 +39,7 @@ import {
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
+import { writeStepReport } from './lib/report.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -136,9 +137,14 @@ async function main() {
   const toPublish = shuffled.slice(0, Math.min(publishSample, shuffled.length))
   const toUnpublish = shuffled.slice(0, Math.min(unpublishSample, shuffled.length))
 
+  let published = 0
+  let unpublished = 0
+  let publishFailed = 0
+
   console.log(`\n→ Bulk publish (${toPublish.length} entries)`)
   if (DRY_RUN) {
     toPublish.forEach((e) => console.log(`  [dry-run] publish ${e.content_type}/${e.uid}`))
+    published = toPublish.length
   } else {
     const { ok, status, body } = await bulkPublish(base, headers, {
       entries: toPublish,
@@ -147,8 +153,10 @@ async function main() {
     })
     if (ok) {
       console.log(`  ✓ enqueued: ${body?.notice || JSON.stringify(body).slice(0, 200)}`)
+      published = toPublish.length
     } else {
       console.error(`  ✗ failed (${status}):`, body?.error_message || body?.errors || body)
+      publishFailed += 1
     }
   }
 
@@ -161,6 +169,7 @@ async function main() {
     console.log(`\n→ Bulk unpublish (${toUnpublish.length} entries)`)
     if (DRY_RUN) {
       toUnpublish.forEach((e) => console.log(`  [dry-run] unpublish ${e.content_type}/${e.uid}`))
+      unpublished = toUnpublish.length
     } else {
       const { ok, status, body } = await bulkUnpublish(base, headers, {
         entries: toUnpublish,
@@ -169,6 +178,7 @@ async function main() {
       })
       if (ok) {
         console.log(`  ✓ enqueued: ${body?.notice || JSON.stringify(body).slice(0, 200)}`)
+        unpublished = toUnpublish.length
       } else {
         // 422 / 409 are common if those entries weren't published yet —
         // not fatal for a periodic cycle.
@@ -177,6 +187,12 @@ async function main() {
     }
   }
 
+  writeStepReport({
+    planned: toPublish.length + toUnpublish.length,
+    actual: published + unpublished,
+    failed: publishFailed,
+    kpis: { published, unpublished, publishFailed },
+  })
   console.log('\n✓ done')
 }
 

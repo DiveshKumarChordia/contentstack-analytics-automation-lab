@@ -40,6 +40,7 @@ import {
   sleep,
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
+import { writeStepReport } from './lib/report.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -376,6 +377,11 @@ async function main() {
   }
 
   console.log(`\n✓ done — ${totalT} transitions, ${totalS} skipped`)
+  writeStepReport({
+    planned: totalT + totalS,
+    actual: totalT,
+    kpis: { transitions: totalT, transitionsSkipped: totalS },
+  })
 }
 
 main().catch((err) => {
