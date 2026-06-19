@@ -153,12 +153,14 @@ export async function listEntries(
   base,
   headers,
   contentTypeUid,
-  { locale, environment, limit = 10, desc, asc } = {},
+  { locale, environment, limit = 10, skip, desc, asc, includeCount } = {},
 ) {
   const params = new URLSearchParams()
   if (locale) params.set('locale', locale)
   if (environment) params.set('environment', environment)
   if (limit != null) params.set('limit', String(limit))
+  if (skip != null) params.set('skip', String(skip))
+  if (includeCount) params.set('include_count', 'true')
   if (desc) params.set('desc', desc)
   if (asc) params.set('asc', asc)
   const q = params.toString()

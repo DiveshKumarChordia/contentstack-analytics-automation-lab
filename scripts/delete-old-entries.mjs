@@ -10,20 +10,20 @@
  * the bonus of driving `entry_deleted` meter events that feed the dashboard's
  * `entries_removed` series and Net Entries trend.
  *
- * Strategy: list each content type's entries sorted desc by `updated_at`, skip
- * ahead until we find ones older than the cutoff, then DELETE up to a per-run
- * cap. A floor (`keepNewest`) ensures we never empty a content type — useful
- * so the bulk-publish + workflow-transition phases have something to operate
- * on.
+ * Strategy: for each content type, paginate ASC by `updated_at` (oldest first)
+ * and DELETE *every* entry older than the cutoff — no keep-floor, no per-run
+ * cap. "Delete all entries older than N days" means all of them, every run.
+ * The create step (which runs after delete in the periodic pipeline) repopulates
+ * the < N-day window, so the bulk-publish / workflow phases still have entries.
  *
  * Token: stack-level CONTENTSTACK_MANAGEMENT_TOKEN — DELETE /v3/entries is
  * within the management token's scope per Contentstack docs.
  *
  * Env knobs:
- *   CONTENTSTACK_DELETE_OLDER_THAN_DAYS  — cutoff (default 7)
- *   CONTENTSTACK_DELETE_MAX_PER_RUN      — cap deletes per run (default 50)
- *   CONTENTSTACK_DELETE_KEEP_NEWEST      — floor per content type (default 10)
+ *   CONTENTSTACK_DELETE_OLDER_THAN_DAYS  — cutoff in days (default 7)
  *   CONTENTSTACK_DELETE_CONTENT_TYPES    — CSV; default = content-types manifest
+ *   (CONTENTSTACK_DELETE_MAX_PER_RUN / _KEEP_NEWEST are no longer used — we now
+ *    delete everything older than the cutoff.)
  *
  * Usage:
  *   node --env-file=.env scripts/delete-old-entries.mjs
@@ -67,41 +67,57 @@ function deriveContentTypesFromManifest() {
 }
 
 async function deleteFromContentType(base, headers, ctUid, locale, opts) {
-  const { cutoffMs, keepNewest, remaining } = opts
-  const { ok, body } = await listEntries(base, headers, ctUid, {
-    locale,
-    limit: 100,
-    desc: 'updated_at',
-  })
-  if (!ok) {
-    console.warn(`  ${ctUid}: listEntries failed — skipping`)
-    return { deleted: 0, scanned: 0, kept: 0 }
+  const { cutoffMs } = opts
+
+  // Phase 1 — paginate ASC by updated_at (oldest first) and collect EVERY entry
+  // older than the cutoff. No keep-floor, no per-run cap: "delete all older than
+  // N days" means all of them. Because the sort is ascending, every entry older
+  // than the cutoff is contiguous at the front — the first entry we hit that is
+  // >= cutoff means all remaining are newer, so we can stop. We collect first,
+  // then delete (so deletions never shift the pages we're still reading).
+  const toDelete = []
+  let skip = 0
+  let scanned = 0
+  for (;;) {
+    const { ok, body } = await listEntries(base, headers, ctUid, {
+      locale,
+      limit: 100,
+      skip,
+      asc: 'updated_at',
+    })
+    if (!ok) {
+      console.warn(`  ${ctUid}: listEntries failed (skip=${skip}) — stopping this CT`)
+      break
+    }
+    const entries = body.entries || []
+    if (entries.length === 0) break
+    scanned += entries.length
+    let hitNewer = false
+    for (const e of entries) {
+      const t = e.updated_at ? Date.parse(e.updated_at) : NaN
+      if (Number.isFinite(t) && t < cutoffMs) {
+        toDelete.push(e)
+      } else {
+        hitNewer = true // ascending → first one at/after cutoff ends the old run
+        break
+      }
+    }
+    if (hitNewer) break
+    skip += entries.length
   }
-  const entries = body.entries || []
-  if (entries.length <= keepNewest) {
-    console.log(`  ${ctUid}: ${entries.length} entries (≤ keep floor ${keepNewest}) — skip`)
-    return { deleted: 0, scanned: entries.length, kept: entries.length }
-  }
-  const candidates = entries.slice(keepNewest) // older than the freshest N
-  // Filter to entries actually older than the cutoff before opening progress.
-  const eligible = candidates.filter((e) => {
-    const t = e.updated_at ? Date.parse(e.updated_at) : NaN
-    return Number.isFinite(t) && t < cutoffMs
-  })
-  const toDelete = eligible.slice(0, remaining)
 
   if (toDelete.length === 0) {
-    console.log(`  ${ctUid}: scanned=${candidates.length} deleted=0 kept=${entries.length} (nothing older than cutoff)`)
-    return { deleted: 0, scanned: candidates.length, kept: entries.length }
+    console.log(`  ${ctUid}: scanned=${scanned} deleted=0 (nothing older than cutoff)`)
+    return { deleted: 0, scanned }
   }
 
-  console.log(`  ${ctUid}: ${candidates.length} candidates, ${toDelete.length} eligible to delete`)
+  // Phase 2 — delete every collected entry.
+  console.log(`  ${ctUid}: ${toDelete.length} entries older than cutoff → deleting all`)
   const progress = createProgress({
     label: `${ctUid} delete`,
     total: toDelete.length,
     everyN: 25,
   })
-
   let deleted = 0
   for (const e of toDelete) {
     if (DRY_RUN) {
@@ -124,11 +140,10 @@ async function deleteFromContentType(base, headers, ctUid, locale, opts) {
       )
       progress.tick({ ok: false })
     }
-    await sleep(100) // light throttle — DELETE is heavier than read
+    await sleep(80) // light throttle — DELETE is heavier than read
   }
   progress.done()
-  const kept = entries.length - deleted
-  return { deleted, scanned: candidates.length, kept }
+  return { deleted, scanned }
 }
 
 async function main() {
@@ -137,8 +152,6 @@ async function main() {
   const headers = headersForToken(apiKey, tokens[0], branch)
 
   const days = parseInt(optionalEnv('CONTENTSTACK_DELETE_OLDER_THAN_DAYS', '7'), 10)
-  const perRunCap = parseInt(optionalEnv('CONTENTSTACK_DELETE_MAX_PER_RUN', '50'), 10)
-  const keepNewest = parseInt(optionalEnv('CONTENTSTACK_DELETE_KEEP_NEWEST', '10'), 10)
   const contentTypes = csv(
     'CONTENTSTACK_DELETE_CONTENT_TYPES',
     deriveContentTypesFromManifest(),
@@ -153,31 +166,22 @@ async function main() {
 
   console.log(`delete-old-entries`)
   console.log(`  stack:   api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}`)
-  console.log(`  cutoff:  > ${days} days old  (before ${new Date(cutoffMs).toISOString()})`)
-  console.log(`  caps:    perRunCap=${perRunCap}  keepNewest=${keepNewest}`)
+  console.log(`  policy:  delete ALL entries > ${days} days old (no floor, no cap)`)
+  console.log(`  cutoff:  before ${new Date(cutoffMs).toISOString()}  (by updated_at)`)
   console.log(`  scope:   ${contentTypes.join(', ')}`)
   if (DRY_RUN) console.log('** DRY RUN — no API writes **')
 
-  let remaining = perRunCap
   let totalDeleted = 0
-  let totalKept = 0
+  let totalScanned = 0
   for (const ctUid of contentTypes) {
-    if (remaining <= 0) {
-      console.log(`  (per-run cap of ${perRunCap} reached — stopping)`)
-      break
-    }
-    const { deleted, kept } = await deleteFromContentType(base, headers, ctUid, locale, {
+    const { deleted, scanned } = await deleteFromContentType(base, headers, ctUid, locale, {
       cutoffMs,
-      perRunCap,
-      keepNewest,
-      remaining,
     })
-    remaining -= deleted
     totalDeleted += deleted
-    totalKept += kept
+    totalScanned += scanned
   }
 
-  console.log(`\n✓ done — ${totalDeleted} deleted, ${totalKept} retained across ${contentTypes.length} content type(s)`)
+  console.log(`\n✓ done — ${totalDeleted} deleted (scanned ${totalScanned}) across ${contentTypes.length} content type(s)`)
 }
 
 main().catch((err) => {

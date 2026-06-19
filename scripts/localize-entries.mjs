@@ -34,6 +34,7 @@ import {
   headersForToken,
   listEntries,
   localizeEntry,
+  getEntryLocales,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
@@ -66,11 +67,14 @@ function deriveContentTypesFromManifest() {
  * Keeps the original title as the trunk and prefixes with a locale tag so
  * dashboards rendering the title still show recognizable provenance.
  */
-function localizedTitle(originalTitle, localeCode) {
+function localizedTitle(originalTitle, localeCode, entryUid) {
   // tag like "[fr-FR]" — uppercases the region for readability
   const parts = localeCode.split('-')
   const tag = parts.length === 2 ? `${parts[0]}-${parts[1].toUpperCase()}` : localeCode
-  return `[${tag}] ${originalTitle || 'Untitled'}`
+  // `title` is unique per stack — suffix with the entry uid tail so two entries
+  // that share a master title don't collide on the localized title (a 422 cause).
+  const suffix = entryUid ? ` · ${String(entryUid).slice(-6)}` : ''
+  return `[${tag}] ${originalTitle || 'Untitled'}${suffix}`
 }
 
 async function localizeForContentType(base, headers, ctUid, targets, opts) {
@@ -83,45 +87,56 @@ async function localizeForContentType(base, headers, ctUid, targets, opts) {
   })
   if (!ok) {
     console.warn(`  ${ctUid}: listEntries failed — skipping`)
-    return { localized: 0, skipped: 0 }
+    return { localized: 0, already: 0, failed: 0 }
   }
   const entries = body.entries || []
   if (entries.length === 0) {
     console.log(`  ${ctUid}: 0 entries`)
-    return { localized: 0, skipped: 0 }
+    return { localized: 0, already: 0, failed: 0 }
   }
 
-  // Work items = full (entry × target locale) cross-product. We DON'T
-  // pre-check via getEntryLocales because that endpoint returns ALL stack
-  // locales with a `localized:true/false` flag, and parsing it correctly
-  // doubles the API call count. Instead, we issue the localizeEntry PUT
-  // and let cma-api's 422 "already localized" response be the natural
-  // idempotency signal. The progress logger counts those as fail=N so you
-  // can see the existing-vs-new ratio at a glance.
-  const workItems = []
-  for (const entry of entries) {
-    for (const target of targets) {
-      workItems.push({ entry, target })
-    }
-  }
+  // PRE-CHECK which target locales each entry already has, via
+  // GET /entries/{uid}/locales (every stack locale + a `localized` flag). This
+  // makes "already localized" a REAL signal rather than a guessed 422 — so a
+  // genuine localize failure surfaces as an actual error instead of being
+  // silently bucketed as a skip (which is why every run read "0 localized").
+  let already = 0
+  const work = []
+  await runWithConcurrency(
+    entries,
+    async (entry) => {
+      const { ok: gOk, body: gBody } = await getEntryLocales(base, headers, {
+        contentTypeUid: ctUid,
+        entryUid: entry.uid,
+      })
+      const localizedCodes = new Set(
+        gOk ? (gBody.locales || []).filter((l) => l && l.localized).map((l) => l.code) : [],
+      )
+      for (const target of targets) {
+        if (localizedCodes.has(target)) already++
+        else work.push({ entry, target })
+      }
+    },
+    { concurrency },
+  )
 
   console.log(
-    `  ${ctUid}: ${entries.length} entries × ${targets.length} targets = ${workItems.length} localize attempts (422s on already-localized are expected)`,
+    `  ${ctUid}: ${entries.length} entries — ${already} (entry,locale) already localized, ${work.length} to create`,
   )
+  if (work.length === 0) return { localized: 0, already, failed: 0 }
 
   const progress = createProgress({
     label: `${ctUid} localize`,
-    total: workItems.length,
+    total: work.length,
     everyN: 20,
   })
 
   let localized = 0
-  let skipped = 0
+  let failed = 0
   await runWithConcurrency(
-    workItems,
+    work,
     async ({ entry, target }) => {
-      const title = localizedTitle(entry.title, target)
-      const fields = { title }
+      const title = localizedTitle(entry.title, target, entry.uid)
       if (DRY_RUN) {
         console.log(`    [dry-run] ${ctUid}/${entry.uid} → ${target}  "${title}"`)
         localized++
@@ -132,26 +147,27 @@ async function localizeForContentType(base, headers, ctUid, targets, opts) {
         contentTypeUid: ctUid,
         entryUid: entry.uid,
         locale: target,
-        fields,
+        fields: { title },
       })
       if (lOk) {
         localized++
         progress.tick({ ok: true })
       } else {
-        skipped++
+        failed++
         progress.tick({ ok: false })
-        if (status !== 422) {
-          console.warn(
-            `    ${ctUid}/${entry.uid} → ${target} failed (${status}): ${lBody?.error_message || JSON.stringify(lBody).slice(0, 120)}`,
-          )
-        }
+        // Log the REAL reason for EVERY failure (no more silent 422-as-skip).
+        const reason =
+          lBody?.error_message ||
+          (lBody?.errors && JSON.stringify(lBody.errors)) ||
+          JSON.stringify(lBody).slice(0, 160)
+        console.warn(`    ✗ ${ctUid}/${entry.uid} → ${target} (${status}): ${reason}`)
       }
       await sleep(50)
     },
     { concurrency },
   )
   progress.done()
-  return { localized, skipped }
+  return { localized, already, failed }
 }
 
 async function main() {
@@ -180,9 +196,10 @@ async function main() {
   if (DRY_RUN) console.log('** DRY RUN — no API writes **')
 
   let totalL = 0
-  let totalS = 0
+  let totalA = 0
+  let totalF = 0
   for (const ctUid of contentTypes) {
-    const { localized, skipped } = await localizeForContentType(
+    const { localized, already, failed } = await localizeForContentType(
       base,
       headers,
       ctUid,
@@ -190,9 +207,15 @@ async function main() {
       { maxPerCt, concurrency },
     )
     totalL += localized
-    totalS += skipped
+    totalA += already
+    totalF += failed
   }
-  console.log(`\n✓ done — ${totalL} localized, ${totalS} skipped`)
+  console.log(
+    `\n✓ done — ${totalL} localized, ${totalA} already localized, ${totalF} failed`,
+  )
+  // Surface real failures (previously hidden as "skipped"): non-zero exit makes
+  // drive-all flag this step so the genuine error is visible in the run summary.
+  if (totalF > 0) process.exitCode = 1
 }
 
 main().catch((err) => {
