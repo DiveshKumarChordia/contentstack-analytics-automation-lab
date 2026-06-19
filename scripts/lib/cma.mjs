@@ -354,49 +354,49 @@ export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
   const password = optionalEnv('CONTENTSTACK_USER_PASSWORD')
   if (!email || !password) return null
 
-  // Path 2: TOTP at runtime — preferred for automation with 2FA enabled
+  // Path 2: TOTP at runtime — preferred for automation with 2FA enabled.
+  // Path 4 fallback: a manually-pasted TFA code (no secret).
   const totpSecret = optionalEnv('CONTENTSTACK_USER_TOTP_SECRET')
-  let tfaToken = optionalEnv('CONTENTSTACK_USER_TFA_TOKEN') // Path 4 fallback
-  let usedTotp = false
+  const manualTfa = optionalEnv('CONTENTSTACK_USER_TFA_TOKEN')
 
-  if (totpSecret) {
-    const { totp, secondsUntilNextStep } = await import('./totp.mjs')
-    // If we're within the last second of the current step, the code we
-    // compute might roll over server-side mid-flight. Wait through the
-    // boundary before computing to keep latency-related drift bounded.
-    const remaining = secondsUntilNextStep()
-    if (remaining <= 1) {
-      await sleep((remaining + 0.2) * 1000)
+  // Retry on transient failures: 5xx / 429 are server-side or rate-limit blips
+  // ("/v3/user-session 500: We're sorry, something went wrong…" is Contentstack's
+  // generic 500), and a 401 right at a TOTP rollover clears on a fresh code.
+  // We recompute the TOTP each attempt (time advances) and back off between tries.
+  const maxAttempts = 4
+  let last = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let tfaToken = manualTfa
+    if (totpSecret) {
+      const { totp, secondsUntilNextStep } = await import('./totp.mjs')
+      // If we're within the last second of the current step, the code we compute
+      // might roll over server-side mid-flight — wait through the boundary first.
+      const remaining = secondsUntilNextStep()
+      if (remaining <= 1) await sleep((remaining + 0.2) * 1000)
+      tfaToken = totp(totpSecret)
     }
-    tfaToken = totp(totpSecret)
-    usedTotp = true
-  }
 
-  const result = await loginUserSession(base, apiKey, email, password, tfaToken)
-  if (result.ok) {
-    return userSessionHeaders(apiKey, result.authtoken, branch)
-  }
+    const result = await loginUserSession(base, apiKey, email, password, tfaToken)
+    if (result.ok) return userSessionHeaders(apiKey, result.authtoken, branch)
+    last = result
 
-  // If the TOTP attempt failed AND it was very close to the rollover, the
-  // server may have advanced its window. Try once more with a freshly-computed
-  // code. Only do this for the TOTP path — manual TFA tokens shouldn't retry.
-  if (usedTotp && result.status === 401 && totpSecret) {
-    const { totp } = await import('./totp.mjs')
-    const fresh = totp(totpSecret)
-    if (fresh !== tfaToken) {
-      const retry = await loginUserSession(base, apiKey, email, password, fresh)
-      if (retry.ok) {
-        return userSessionHeaders(apiKey, retry.authtoken, branch)
-      }
+    const transient = result.status >= 500 || result.status === 429
+    // A 401 is only worth retrying on the TOTP path (a fresh code may pass);
+    // a manual TFA token that 401s is simply wrong/expired.
+    const rolloverAuth = !!totpSecret && result.status === 401
+    if (attempt < maxAttempts && (transient || rolloverAuth)) {
+      const wait = transient ? 1500 * attempt : 900 // linear backoff for 5xx/429
       console.warn(
-        `  ⚠ /v3/user-session login failed even after TOTP retry (${retry.status}): ${retry.body?.error_message || JSON.stringify(retry.body).slice(0, 200)}`,
+        `  ⚠ /v3/user-session attempt ${attempt}/${maxAttempts} failed (${result.status}) — retrying in ${Math.round(wait / 100) / 10}s`,
       )
-      return null
+      await sleep(wait)
+      continue
     }
+    break
   }
 
   console.warn(
-    `  ⚠ /v3/user-session login failed (${result.status}): ${result.body?.error_message || JSON.stringify(result.body).slice(0, 200)}`,
+    `  ⚠ /v3/user-session login failed (${last?.status}): ${last?.body?.error_message || JSON.stringify(last?.body).slice(0, 200)}`,
   )
   return null
 }
