@@ -850,3 +850,107 @@ export async function deleteEntry(base, headers, { contentTypeUid, entryUid, loc
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
 }
+
+// =============================================================================
+// Restore + orphan-driving destructive ops (used by churn-orphans.mjs).
+// These exercise the exact cma mutations the analytics meter must handle:
+// entry restore, workflow scope-edit / disable / delete, branch + locale delete.
+// =============================================================================
+
+/**
+ * Restore a soft-deleted (trashed) entry in a given locale.
+ * PUT /v3/content_types/{ct}/entries/{uid}/restore  body { entry: { locale } }.
+ * Restore bumps the entry's `updated_at` (the only un-delete that does), so the
+ * snapshot meter's Axis-1 picks it up hourly.
+ */
+export async function restoreEntry(base, headers, { contentTypeUid, entryUid, locale }) {
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}/restore`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ entry: locale ? { locale } : {} }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** GET a single workflow (workflow2.0) by uid — to read its current scope. */
+export async function getWorkflow(base, headers, workflowUid) {
+  const url = `${base}/v3/workflows/${workflowUid}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Update a workflow (PUT /v3/workflows/{uid}). Pass a partial workflow object;
+ * cma replaces the supplied keys. Used to DETACH a content_type/branch from the
+ * workflow's scope (orphans its entries) or to toggle `enabled`.
+ */
+export async function updateWorkflow(base, headers, workflowUid, workflow) {
+  const url = `${base}/v3/workflows/${workflowUid}`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ workflow }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** DELETE a workflow (terminal — orphans its in-workflow entries' `_workflow`). */
+export async function deleteWorkflow(base, headers, workflowUid) {
+  const url = `${base}/v3/workflows/${workflowUid}`
+  const res = await fetch(url, { method: 'DELETE', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** DELETE a branch (async, terminal). Orphans entries that still list it in
+ *  `_branches`. POST returns a job; the branch is gone once it settles. */
+export async function deleteBranch(base, headers, branchUid) {
+  const url = `${base}/v3/stacks/branches/${encodeURIComponent(branchUid)}`
+  const res = await fetch(url, { method: 'DELETE', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+// =============================================================================
+// Stack users + roles (for ensure-stack-user-role.mjs — the auth-sdk fix).
+// auth-sdk's listStackUsers only returns users with an EXPLICIT stack role
+// (RBAC). A user with only org-level access isn't counted. Sharing the stack
+// with the automation user + a CMS role creates that RBAC record.
+// =============================================================================
+
+/** GET the logged-in user (needs a USER authtoken, not a mgmt token). */
+export async function getCurrentUser(base, headers) {
+  const url = `${base}/v3/user`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** GET the stack's roles (mgmt token ok). Used to find a CMS/Developer role uid. */
+export async function listStackRoles(base, headers) {
+  const url = `${base}/v3/roles?include_rules=false&limit=100`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Share the stack with one or more users, assigning stack roles.
+ * POST /v3/stacks/share  body { emails: [...], roles: { <email>: [roleUid] } }.
+ * Requires a USER authtoken. Idempotent-ish: re-sharing an existing member with
+ * the same roles is a no-op / benign error the caller can tolerate.
+ */
+export async function shareStack(base, headers, { emails, roles }) {
+  const url = `${base}/v3/stacks/share`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ emails, roles }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}

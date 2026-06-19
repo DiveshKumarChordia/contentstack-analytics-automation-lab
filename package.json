@@ -19,6 +19,8 @@
     "automate:localize": "node --env-file=.env scripts/localize-entries.mjs",
     "automate:locale-experiments": "node --env-file=.env scripts/locale-experiments.mjs",
     "automate:publishing-rules": "node --env-file=.env scripts/seed-publishing-rules.mjs",
+    "automate:ensure-role": "node --env-file=.env scripts/ensure-stack-user-role.mjs",
+    "automate:churn": "node --env-file=.env scripts/churn-orphans.mjs",
     "automate:drive": "node --env-file=.env scripts/drive-all.mjs",
     "automate:drive:bootstrap": "node --env-file=.env scripts/drive-all.mjs --mode bootstrap",
     "automate:drive:full": "node --env-file=.env scripts/drive-all.mjs --mode full",

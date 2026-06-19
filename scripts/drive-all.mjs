@@ -82,6 +82,9 @@ async function bootstrapPhase() {
   results.push(await runStep('locales + branches',          'seed-locales-branches.mjs'))
   results.push(await runStep('workflows',                   'seed-workflows.mjs'))
   results.push(await runStep('publishing rules',            'seed-publishing-rules.mjs'))
+  // Give the automation user an explicit stack CMS role so auth-sdk's
+  // listStackUsers counts it (and entries get a resolvable _created_by).
+  results.push(await runStep('ensure stack user role',      'ensure-stack-user-role.mjs'))
   return results
 }
 
@@ -104,6 +107,10 @@ async function periodicPhase() {
   //    workflow create (no-op when already present) and re-applies the
   //    transition policy to entries created since last run.
   results.push(await runStep('workflow transitions on existing entries', 'seed-workflows.mjs'))
+  // 6. Orphan-case churn: disable/detach a workflow, throwaway branch/locale/$all
+  //    workflow lifecycle, and one entry delete→restore — drives every mutation
+  //    the entry_workflow_snapshot meter handles (the cases nothing else covers).
+  results.push(await runStep('churn orphan cases', 'churn-orphans.mjs'))
   return results
 }
 

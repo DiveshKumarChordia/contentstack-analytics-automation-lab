@@ -204,6 +204,120 @@ Details, secrets, and placeholders: **[AUTOMATION.md](./AUTOMATION.md)**.
 
 Optional: trigger redeploys when content publishes (webhook, GitHub Action, or Launch deploy hook). For **multi-field manifests**, **`npm run automate:manifest`**, **`npm run automate:entries:periodic`**, and **`npm run warm:launch-urls`** (used in CI to GET each entry page on Launch; every **5** minutes via [`.github/workflows/contentstack-periodic-entries.yml`](.github/workflows/contentstack-periodic-entries.yml); optional **Delivery** GET warm-up step), and taxonomy/reference placeholders, see **[AUTOMATION.md](./AUTOMATION.md)**.
 
+## Architecture & design
+
+This repo is two things sharing one stack: a small **React/Launch site** (the
+delivery surface) and a set of **Contentstack CMA automation scripts** whose real
+job is to **continuously generate realistic CMS activity** — entries, locales,
+branches, workflows, publishes, deletes, restores, and *orphaning* mutations — so
+the downstream **CMS analytics meters** (entry counts, workflow snapshot / Stalled
+Entries / Audit Log, locale & branch axes) always have live, varied data.
+
+### HLD — high-level architecture
+
+```mermaid
+flowchart LR
+  subgraph GHA["GitHub Actions (cron */5)"]
+    drive["drive-all.mjs\n(orchestrator)"]
+  end
+  subgraph Scripts["automation scripts (Node 20, CMA)"]
+    boot["bootstrap: content-types · locales · branches ·\nworkflows · publishing-rules · ensure-stack-user-role"]
+    per["periodic: delete-old · create · localize ·\nbulk-publish · workflow-transitions · churn-orphans"]
+  end
+  CS[("Contentstack stack\n(CMA: rawcms)")]
+  Launch["React site on Launch\n(Delivery API)"]
+  Meter["analytics-data-sync\ncms-metering meters (ES)"]
+  Dash["CMS dashboards\n(data-analytics-api)"]
+
+  drive --> boot --> CS
+  drive --> per --> CS
+  CS --> Launch
+  CS -. nightly + hourly scan .-> Meter --> Dash
+  GHA -. warm GETs .-> Launch
+```
+
+- **Auth:** most ops use a **stack management token**. Three things need a **user
+  session** (email + password, TOTP-aware) because mgmt tokens can't do them:
+  **workflow stage transitions**, **sharing the stack** (`ensure-stack-user-role`),
+  and a resolvable `_created_by`. The session is obtained via `/v3/user-session`
+  (`scripts/lib/cma.mjs` → `tryLoadUserSessionHeaders`, `lib/totp.mjs`).
+- **Soft-fail:** `drive-all` runs each step in its own child process; one step
+  failing never aborts the rest, and the job exits non-zero only if *every* step
+  fails.
+
+### Sequence — `drive-all` run
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Cron as GitHub Actions
+  participant Drive as drive-all.mjs
+  participant CMA as Contentstack CMA
+  Cron->>Drive: npm run automate:drive:ci --mode {periodic|bootstrap|full}
+
+  opt mode = bootstrap | full
+    Drive->>CMA: content types (manifest) · locales + branches · workflows · publishing rules
+    Drive->>CMA: ensure-stack-user-role → POST /stacks/share (user session) → user gets a CMS role
+  end
+
+  opt mode = periodic | full
+    Drive->>CMA: delete-old-entries → delete ALL entries > 7d (paginated, no floor/cap)
+    Drive->>CMA: periodic-entries → create entries (master locale)
+    Drive->>CMA: localize-entries → pre-check locales, PUT only missing (real errors surfaced)
+    Drive->>CMA: bulk-publish-cycle → publish/unpublish sample
+    Drive->>CMA: seed-workflows → stage transitions (user session)
+    Drive->>CMA: churn-orphans → disable/detach · branch/locale/$all-wf lifecycle · entry delete→restore
+  end
+  Drive-->>Cron: summary (N/M steps ok)
+```
+
+### LLD — scripts
+
+| Script | Purpose | Auth | Key endpoints |
+|---|---|---|---|
+| `bootstrap-from-manifest.mjs` | Create content types from manifest | mgmt | `POST /content_types` |
+| `seed-locales-branches.mjs` | Add locales + branches | mgmt | `POST /locales`, `POST /stacks/branches` |
+| `seed-workflows.mjs` | Create workflows (idempotent) + **stage transitions** | mgmt + **user** | `POST/PUT /workflows`, `POST /entries/{uid}/workflow` |
+| `seed-publishing-rules.mjs` | Publishing rules per workflow stage | mgmt | `POST /workflows/.../publishing_rules` |
+| `ensure-stack-user-role.mjs` | **Give the automation user an explicit stack CMS role** | **user** | `GET /roles`, `POST /stacks/share` |
+| `periodic-entries-from-manifest.mjs` | Create entries (resolves `__REF__`) | mgmt | `POST /entries` |
+| `localize-entries.mjs` | Localize newest entries into target locales | mgmt | `GET /entries/{uid}/locales`, `PUT /entries/{uid}?locale=` |
+| `bulk-publish-cycle.mjs` | Publish/unpublish a sample | mgmt | `POST /bulk/publish|unpublish` |
+| `delete-old-entries.mjs` | **Delete ALL entries > N days (default 7) every run** | mgmt | `GET/DELETE /entries` |
+| `churn-orphans.mjs` | **Drive every orphaning mutation** | mgmt | `PUT/DELETE /workflows`, `DELETE /branches`, `DELETE /locales`, `PUT /entries/.../restore` |
+| `drive-all.mjs` | Orchestrate bootstrap/periodic | inherits | spawns the above |
+
+### Case → analytics-meter coverage
+
+`churn-orphans.mjs` exists specifically to produce the mutations nothing else does
+— the ones the `entry_workflow_snapshot` meter must handle:
+
+| Case (churn) | CMS mutation | Meter behavior exercised |
+|---|---|---|
+| disable→enable | `enabled` toggle on a workflow | disable == enable (no orphaning) |
+| detach→reattach CT | remove/add a content_type from a workflow's scope | Axis 2 scope-removal orphan + re-govern |
+| branch create→delete | throwaway branch lifecycle | Axis 3 branch-delete path |
+| locale create→delete | throwaway locale lifecycle | Axis 4 locale-delete path |
+| `$all` workflow create→delete | a workflow scoped to all CTs/branches | `$all` governance + workflow-delete |
+| entry delete→restore | soft-delete then restore an entry | Axis 1 delete (tombstone) + restore (un-flag) |
+| delete-old-entries | bulk delete > 7d | `entries_deleted` events; keeps the stack bounded |
+| localize-entries | new localized variants | `entry_created` keyed by non-master locale → Locale axis |
+
+### Running
+
+```bash
+# local (needs .env)
+npm run automate:drive:bootstrap   # one-time setup (incl. ensure-stack-user-role)
+npm run automate:drive             # periodic cycle
+npm run automate:churn -- --dry-run  # preview the orphan cases
+npm run automate:ensure-role       # just the stack-role grant
+npm run automate:delete -- --dry-run # preview the 7-day cleanup
+```
+CI runs `automate:drive:ci` every 5 minutes per GitHub Environment (see
+[`.github/workflows/contentstack-periodic-entries.yml`](.github/workflows/contentstack-periodic-entries.yml)).
+For the full automation env-var matrix and manifest format, see
+**[AUTOMATION.md](./AUTOMATION.md)**.
+
 ## References
 
 - [Launch overview](https://www.contentstack.com/docs/developers/launch)
