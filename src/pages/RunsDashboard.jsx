@@ -122,6 +122,16 @@ function computeAll(runs) {
       ['CT detach cycles', fmt(sumK('churnDetach'))],
       ['WF disable cycles', fmt(sumK('churnDisable'))],
     ]},
+    { title: 'Branch lifecycle', items: [
+      ['Branches created', fmt(sumK('branchesCreated'))],
+      ['Branches deleted', fmt(sumK('branchesDeleted'))],
+      ['Branch entries', fmt(sumK('branchEntries'))],
+      ['Branch localizations', fmt(sumK('branchLocalized'))],
+      ['Dynamic CTs created', fmt(sumK('dynCtCreated'))],
+      ['Dynamic CT entries', fmt(sumK('dynCtEntries'))],
+      ['Workflow branch adds', fmt(sumK('workflowBranchAdds'))],
+      ['Multi-branch publish rules', fmt(sumK('publishRules'))],
+    ]},
     { title: 'Efficiency & plan', items: [
       ['Total planned ops', fmt(planned)],
       ['Total actual ops', fmt(actual)],

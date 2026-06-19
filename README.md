@@ -65,6 +65,11 @@ Vite + React app that lists **published** entries for one or more content types 
    | `CONTENTSTACK_BULK_BATCH` | Entries per bulk publish/unpublish request (default `100`) |
    | `CONTENTSTACK_PUBLISH_TRANSITION_CONCURRENCY` | Parallel stage transitions before publishing (default `6`) |
    | `CONTENTSTACK_USER_AUTHTOKEN` | Logged-in user authtoken for stage transitions (skips `/user-session` login; needed so publishing clears the Publish Rule) |
+   | `CONTENTSTACK_BRANCH_LIFECYCLE_ENABLED` | `false` skips the (heavy) branch-lifecycle step in periodic runs (default on) |
+   | `CONTENTSTACK_BRANCH_LINEAGE_COUNT` / `_SOURCE` | Branches in the ephemeral lineage (default `3`) / root it forks from (default stack branch) |
+   | `CONTENTSTACK_BRANCH_ENTRIES_PER_CT` | Entries created per lineage branch (default `5` — coverage, not volume) |
+   | `CONTENTSTACK_BRANCH_LIFECYCLE_WORKFLOW` / `_CONTENT_TYPE` | Workflow to extend (default `Editorial Review`) / CT for branch entries (default `demo_plain_text`) |
+   | `CONTENTSTACK_BRANCH_LIFECYCLE_CLEANUP` | `false` leaves the lineage + dynamic CT in place (default tears them down) |
    | `CONTENTSTACK_MANIFEST_SKIP_SEEDS` | `true` = bootstrap without POSTing seed entries (periodic uses this to ensure CTs without re-seeding) |
    | `CONTENTSTACK_MANIFEST_SKIP_DUPLICATE_SEEDS` | Duplicate seed titles: skip + hydrate refs unless set to `false` |
    | `CONTENTSTACK_AUTO_ENTRY_TITLE` | Fixed title for `npm run automate:entry` only |
@@ -294,6 +299,7 @@ sequenceDiagram
     Drive->>CMA: bulk-publish-cycle → transition publish-set to approved stage (user session) → publish/unpublish a ratio of created
     Drive->>CMA: seed-workflows → stage transitions (user session)
     Drive->>CMA: churn-orphans → disable/detach · branch/locale/$all-wf lifecycle · entry delete→restore
+    Drive->>CMA: branch-lifecycle → 3-branch lineage (entries+locales) · workflow +branch/+CT · assigned-to transitions · multi-branch publish rule · teardown
   end
   Drive-->>Cron: summary (N/M steps ok)
 ```
@@ -312,6 +318,7 @@ sequenceDiagram
 | `bulk-publish-cycle.mjs` | **Transition publish-set to approved stage, then publish/unpublish a ratio of created** | mgmt + **user** | `POST /entries/{uid}/workflow`, `POST /bulk/publish\|unpublish` |
 | `delete-old-entries.mjs` | **Tiered retention** — trim oldest excess per age band (>30d→5k, 15-30d→10k, 7-15d→20k), concurrent | mgmt | `GET/DELETE /entries` |
 | `churn-orphans.mjs` | **Drive every orphaning mutation** | mgmt | `PUT/DELETE /workflows`, `DELETE /branches`, `DELETE /locales`, `PUT /entries/.../restore` |
+| `branch-lifecycle.mjs` | **Ephemeral 3-branch lineage** — entries+locales per branch, workflow +branch/+CT, dynamic CT, assigned-to transitions, multi-branch publish rule, then teardown | mgmt + **user** | `POST/DELETE /stacks/branches`, `POST/DELETE /content_types`, `PUT /workflows`, `POST/DELETE /publishing_rules`, `POST /entries/.../workflow` |
 | `drive-all.mjs` | Orchestrate bootstrap/periodic | inherits | spawns the above |
 
 ### Case → analytics-meter coverage

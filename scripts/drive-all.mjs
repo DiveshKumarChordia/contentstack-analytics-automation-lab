@@ -146,6 +146,14 @@ async function periodicPhase() {
   //    workflow lifecycle, and one entry delete→restore — drives every mutation
   //    the entry_workflow_snapshot meter handles (the cases nothing else covers).
   results.push(await runStep('churn orphan cases', 'churn-orphans.mjs'))
+  // 7. Branch-lifecycle: an ephemeral 3-branch lineage exercising multi-branch
+  //    entries+locales, workflow branch/CT extension, a dynamic content type,
+  //    assigned-to transitions, and a multi-branch publish rule — then torn down.
+  //    Heavy (async branch create/poll ×N) so it's opt-out via env; the workflow's
+  //    concurrency:cancel-in-progress=false skips the next cron if a run overruns.
+  if (process.env.CONTENTSTACK_BRANCH_LIFECYCLE_ENABLED !== 'false') {
+    results.push(await runStep('branch lifecycle', 'branch-lifecycle.mjs'))
+  }
   return results
 }
 

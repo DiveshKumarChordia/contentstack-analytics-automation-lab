@@ -110,6 +110,17 @@ export async function createContentType(base, headers, { uid, title, schema }) {
   return { ok: res.ok, status: res.status, body }
 }
 
+/** DELETE /v3/content_types/{uid}. force=true also removes its entries. */
+export async function deleteContentType(base, headers, uid, { force = true } = {}) {
+  const q = force ? '?force=true' : ''
+  const res = await fetch(`${base}/v3/content_types/${uid}${q}`, {
+    method: 'DELETE',
+    headers,
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
 export async function createEntry(base, headers, contentTypeUid, entryFields, locale) {
   const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
   const url = `${base}/v3/content_types/${contentTypeUid}/entries${q}`
@@ -642,6 +653,16 @@ export async function createPublishingRule(
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** DELETE /v3/workflows/publishing_rules/{uid}. */
+export async function deletePublishingRule(base, headers, ruleUid) {
+  const res = await fetch(`${base}/v3/workflows/publishing_rules/${ruleUid}`, {
+    method: 'DELETE',
+    headers,
   })
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
