@@ -176,6 +176,16 @@ async function main() {
       }
     }
 
+    if (invited.length > 0) {
+      console.log(`\n⚠ CMS role assignment:`)
+      console.log(`  invited users need CMS roles for auth-sdk compliance.`)
+      console.log(`  run ensure-stack-user-role.mjs for each invited user:`)
+      for (const email of invited.slice(0, 3)) {
+        console.log(`    CONTENTSTACK_USER_EMAIL=${email} node scripts/ensure-stack-user-role.mjs`)
+      }
+      if (invited.length > 3) console.log(`    ... and ${invited.length - 3} more`)
+    }
+
     writeStepReport({
       planned: count,
       actual: invited.length,

@@ -99,6 +99,9 @@ async function main() {
     // For publishing, use the same headers (auth token) since we just picked a different user
     // The metering dimension is about WHO performed the action, tracked by user_uid in the event
     console.log(`  actor B: ${actorBUser.email} (auto-picked from org)`)
+    console.log(`  ⚠ note: ensure actor B has a CMS role on this stack`)
+    console.log(`      run: node --env-file=.env scripts/ensure-stack-user-role.mjs`)
+    console.log(`      with CONTENTSTACK_USER_EMAIL=${actorBUser.email}`)
   } else {
     console.log(`  actor B: (not available — using actor A for publish as well)`)
   }
