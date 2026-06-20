@@ -1,127 +1,393 @@
-# Contentstack Metering Automation Framework
+# Contentstack Analytics Testing & Automation Lab
 
-**Production-grade automation for comprehensive Contentstack CMA testing, meter coverage, and realistic content lifecycle simulation.**
+**Comprehensive platform for testing Contentstack's content delivery, analytics metering, and lifecycle automation. Combines a frontend Vite+React app, Launch site warming, URL hitting, and production-grade CMA automation framework.**
 
-> 📖 **Full documentation:** See [AUTOMATION_FRAMEWORK.md](./AUTOMATION_FRAMEWORK.md) (config & troubleshooting), [DESIGN.md](./DESIGN.md) (architecture & algorithms), [PRD.md](./PRD.md) (requirements & decisions)
+> This is a full-stack testing laboratory for Contentstack that covers the entire content lifecycle: from creation through metering to analytics validation.
+
+**Table of Contents:**
+1. [Project Overview](#project-overview)
+2. [What's Included](#whats-included)
+3. [Team Onboarding](#team-onboarding)
+4. [Architecture](#architecture)
+5. [Frontend App: Entry Listing](#frontend-app--entry-listing)
+6. [Launch Site & URL Hitting](#launch-site--url-hitting)
+7. [Automation Framework: CMA Lifecycle](#automation-framework--cma-lifecycle)
+8. [Self-Healing Logic](#self-healing-logic)
+9. [Complete Configuration Reference](#complete-configuration-reference)
+10. [Running Everything](#running-everything)
+11. [Monitoring & Analytics](#monitoring--analytics)
+12. [CI/CD Integration](#cicd-integration)
+13. [All Scripts Reference](#all-scripts-reference)
+14. [Low-Level Design & Algorithms](#low-level-design--algorithms)
+15. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Table of Contents
+## Project Overview
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Quick Start](#quick-start)
-- [Scripts & Meter Mapping](#scripts--meter-mapping)
-- [Self-Healing Logic](#self-healing-logic)
-- [Configuration](#configuration)
-- [Running the Automation](#running-the-automation)
-- [Monitoring & Analytics](#monitoring--analytics)
-- [CI/CD Integration](#cicd-integration)
+### Purpose
+
+This project is a **full-stack testing and automation laboratory** for Contentstack that validates:
+- **Content Delivery:** Published entries served via Delivery API (frontend app)
+- **Performance:** Launch site warmup and URL hitting for cache/perf testing
+- **Analytics Metering:** CMA operations drive meter events that feed analytics dashboards
+- **Meter Coverage:** All meter dimensions tested (users, branches, locales, workflows, stages, deletions)
+- **Lifecycle Simulation:** Realistic content patterns (aging, branching, multi-user, orphaning)
+
+### The Problem
+
+Analytics dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption) depend on accurate meter events from Contentstack CMA operations. Current testing is shallow:
+- ❌ Only fresh entries (no aged data)
+- ❌ Single user (no multi-user dimensions)
+- ❌ No branching (no lineage events)
+- ❌ No deletions (no deletion metering)
+- ❌ No orphaning scenarios (no cleanup validation)
+- ❌ Manual setup required (content types, locales, workflows)
+
+### The Solution
+
+Three integrated components:
+
+1. **Frontend App** — Vite + React that displays published entries from the Delivery API
+2. **Launch Site + URL Hitting** — Warms cache, tests delivery perf, exercises Delivery API at scale
+3. **Automation Framework** — CMA lifecycle automation that drives all meter dimensions, self-heals missing prerequisites, maintains aged dataset
+
+Together, they create a **production-grade testing environment** that runs continuously (every 5 minutes in CI) to validate analytics pipelines.
 
 ---
 
-## Overview
+## What's Included
 
-This framework automates complex content lifecycle patterns in Contentstack to:
+```mermaid
+graph TB
+    subgraph Frontend["FRONTEND (Vite + React)"]
+        APP["Entry Listing App<br/>Delivery API integration"]
+        HERO["3D Hero<br/>Three.js/React Three Fiber"]
+    end
+    
+    subgraph Performance["PERFORMANCE TESTING"]
+        LAUNCH["Launch Site Warming<br/>Cache priming"]
+        HITTING["URL Hitting<br/>Entry endpoint testing"]
+        WARMUP["Delivery Warmup<br/>Perf validation"]
+    end
+    
+    subgraph Automation["AUTOMATION FRAMEWORK"]
+        BOOTSTRAP["Bootstrap Phase<br/>Create CTs, locales, workflows"]
+        PERIODIC["Periodic Phase (10k entries/run)<br/>Delete, Backfill, Create, Localize,<br/>Publish, Transition, Churn, Branch"]
+        METER["Meter-Coverage Scenarios (6x)<br/>Edit, Delete, Stall, No-WF,<br/>Multi-Actor, Orphan"]
+        USERS["User Management<br/>Invite 10 users + auto roles"]
+    end
+    
+    subgraph Analytics["ANALYTICS PIPELINE"]
+        KAFKA["Kafka Events<br/>entry_created, entry_published,<br/>entry_workflow_*, etc"]
+        MONGO["Mongo Snapshot<br/>analytics-data-sync nightly"]
+        ES["Elasticsearch<br/>METRIC_DATA_INDEX"]
+        DASH["Analytics Dashboards<br/>Content Lifecycle, Workflow Health,<br/>Team Adoption"]
+    end
+    
+    Frontend --> APP
+    Frontend --> HERO
+    Performance --> LAUNCH
+    Performance --> HITTING
+    Performance --> WARMUP
+    Automation --> BOOTSTRAP
+    Automation --> PERIODIC
+    Automation --> METER
+    Automation --> USERS
+    
+    APP -.->|Reads| KAFKA
+    PERIODIC -->|Writes| KAFKA
+    METER -->|Writes| KAFKA
+    USERS -->|Writes| KAFKA
+    LAUNCH -->|Reads| APP
+    HITTING -->|Hits| APP
+    
+    KAFKA --> MONGO
+    MONGO --> ES
+    ES --> DASH
+```
 
-✅ **Drive meter events** across all dimensions (users, branches, locales, workflows, stages)  
-✅ **Test multi-user scenarios** with auto-created and auto-managed users  
-✅ **Simulate realistic content aging** with entry restoration and tiered retention  
-✅ **Cover unmeasured analytics dimensions** (in-progress, deleted, stalled, multi-actor, orphan handling)  
-✅ **Self-heal on missing prerequisites** (auto-create locales, workflows, CMS roles)  
+---
 
-**No manual setup required** — the automation creates and manages everything it needs.
+## Team Onboarding
 
-### Problem It Solves
+### For Frontend Developers
 
-Analytics dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption) depend on metering events from CMA operations. Current testing is shallow:
-- Only fresh entries (no aged data)
-- Single user (no multi-user dimensions)
-- No branching (no lineage events)
-- No soft/hard deletions (no deletion metering)
-- No orphaning scenarios (no cleanup validation)
+**Goal:** Understand how the React app uses Contentstack Delivery API to list and display published entries.
 
-**This automation fills those gaps** by running every 5 minutes, driving 10,000+ entries per run with comprehensive meter coverage.
+**Quick Start:**
+```bash
+# 1. Copy env template
+cp .env.example .env
+
+# 2. Fill in Delivery API credentials (see "Frontend Setup" section)
+VITE_CONTENTSTACK_API_KEY=your_api_key
+VITE_CONTENTSTACK_DELIVERY_TOKEN=your_token
+VITE_CONTENTSTACK_ENVIRONMENT=production
+VITE_CONTENTSTACK_DELIVERY_HOST=https://cdn.contentstack.io
+
+# 3. Start dev server
+npm install
+npm run dev
+
+# 4. Open http://localhost:5173
+# You'll see published entries with 3D hero
+```
+
+**Key Files:**
+- `src/pages/EntryPage.jsx` — Single entry display via route `/entry/:contentTypeUid/:entryUid`
+- `src/App.jsx` — Entry list (all published entries from all CTs)
+- `src/components/Hero.jsx` — Three.js 3D scene using React Three Fiber
+- `vite.config.js` — Vite + React setup
+
+**Environment Variables (Frontend):**
+| Variable | Purpose |
+|----------|---------|
+| `VITE_CONTENTSTACK_API_KEY` | Stack API key |
+| `VITE_CONTENTSTACK_DELIVERY_TOKEN` | Delivery API token (read-only) |
+| `VITE_CONTENTSTACK_ENVIRONMENT` | Target environment uid |
+| `VITE_CONTENTSTACK_DELIVERY_HOST` | CDN URL (e.g., `https://cdn.contentstack.io`) |
+| `VITE_CONTENTSTACK_CONTENT_TYPE_UIDS` | (Optional) CSV of CTs to list; defaults to `top_url_lines` |
+
+---
+
+### For QA/Performance Engineers
+
+**Goal:** Understand how to warm the launch site and hit URLs for performance testing.
+
+**Quick Start:**
+```bash
+# 1. Set env vars (DELIVERY_* + APP URLs)
+export VITE_CONTENTSTACK_CONTENT_TYPE_UIDS=demo_plain_text,demo_json_rte
+export LAUNCH_SITE_URL=https://yoursite.com
+export APP_DELIVERY_HOST=https://cdn.contentstack.io
+
+# 2. Run warmup
+npm run warm:launch-urls
+
+# 3. Monitor performance (check logs, cache headers)
+```
+
+**Scripts:**
+- `npm run warm:launch-urls` — Warms Launch site + Delivery endpoints
+- Results logged to console + `public/warmup-report.json`
+
+**What It Tests:**
+- Delivery API response time
+- Cache hit/miss headers
+- Entry list endpoint
+- Single-entry endpoint `/entry/:ct/:uid`
+
+---
+
+### For Automation Engineers
+
+**Goal:** Understand the CMA automation framework, how it drives meter events, and how self-healing works.
+
+**Quick Start:**
+```bash
+# 1. Set env vars (all CMA + automation vars, see Config section)
+cp .env.example .env
+# Fill in: CONTENTSTACK_API_KEY, CONTENTSTACK_MANAGEMENT_TOKEN, CONTENTSTACK_USER_EMAIL, etc.
+
+# 2. Bootstrap (one-time: create CTs, locales, workflows, branches)
+node --env-file=.env scripts/drive-all.mjs --mode bootstrap
+
+# 3. Run periodic (10k entries, all meter coverage)
+node --env-file=.env scripts/drive-all.mjs --mode periodic
+
+# 4. Monitor dashboard
+# Open http://localhost:5173/runs (shows KPIs, success rate, trends)
+```
+
+**Key Concepts:**
+- **Self-healing:** Automation auto-creates missing locales, workflows, user roles (no manual setup)
+- **Meter coverage:** 6 scenarios (edit-after-publish, permanent-deletes, aged-stalls, no-workflow-ct, multi-actor, branch-locale-deletion)
+- **Data preservation:** No teardown — aged data kept for analytics (tiered retention with backfill)
+- **Volume:** 10,000 entries/run × 5 locales × 5 content types = 250,000 creation events/run
+
+**Key Files:**
+- `scripts/drive-all.mjs` — Orchestrator (bootstrap/periodic/full modes)
+- `scripts/lib/cma.mjs` — CMA helpers + self-healing logic
+- `scripts/` — 19 specialized scripts (delete, backfill, create, localize, etc.)
+
+---
+
+### For Analytics/Data Engineers
+
+**Goal:** Understand how automation drives meter events and validates analytics pipelines.
+
+**Key Points:**
+- Automation creates realistic content patterns (branching, locales, workflows, aging, orphaning)
+- Every CMA operation emits Kafka events (entry_created, entry_published, entry_workflow_*, etc.)
+- Mongo snapshot (analytics-data-sync) runs nightly, materializes METRIC_DATA_INDEX
+- ES -> Analytics dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption)
+
+**Meter Coverage (What Gets Tested):**
+| Meter | Dimension | Driver | Tested |
+|-------|-----------|--------|--------|
+| entries_created | locale | Localize to 5 non-master locales | ✅ 5 locales × 10k |
+| entries_created | content_type | Create across all CTs | ✅ All CTs |
+| entries_created | branch | Create on 30-branch lineage | ✅ Lineage |
+| entries_published | user_uid | Multi-actor (creator ≠ publisher) | ✅ 2 users |
+| entries_in_progress | — | Publish then edit (no republish) | ✅ Scenario |
+| entries_deleted | — | Hard delete (not soft) | ✅ Scenario |
+| entries_without_workflow | — | Create on bare CT (no workflow) | ✅ Scenario |
+| stalled_by_stage | workflow_uid | Entries stuck in mid-stages | ✅ 5+ stages |
+| snapshot (branch axis) | branch_uid | Lineage branch delete | ✅ Orphan |
+| snapshot (locale axis) | locale_code | Locale delete post-stage | ✅ Orphan |
+| org_users | — | Invite 10 users + assign roles | ✅ 10/run |
+
+**Verification:**
+- Check `public/run-history.json` for per-run KPIs
+- Monitor dashboard at `/runs` for trends
+- Verify Kafka events via cma-api logs
+- Validate Elasticsearch METRIC_DATA_INDEX has events
+
+---
+
+### For DevOps/Infrastructure
+
+**Goal:** Deploy automation to CI, manage secrets, monitor health.
+
+**CI Setup (GitHub Actions):**
+```yaml
+name: Periodic Automation
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Every 5 minutes
+  workflow_dispatch:
+
+jobs:
+  periodic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm run automate:drive:ci -- --mode periodic
+        env:
+          CONTENTSTACK_API_KEY: ${{ secrets.CONTENTSTACK_API_KEY }}
+          CONTENTSTACK_MANAGEMENT_TOKEN: ${{ secrets.CONTENTSTACK_MANAGEMENT_TOKEN }}
+          CONTENTSTACK_PUBLISH_ENVIRONMENT: production
+          CONTENTSTACK_USER_EMAIL: ${{ secrets.CONTENTSTACK_USER_EMAIL }}
+          CONTENTSTACK_USER_PASSWORD: ${{ secrets.CONTENTSTACK_USER_PASSWORD }}
+```
+
+**Secrets to Set (GitHub → Settings → Secrets and variables → Actions):**
+- `CONTENTSTACK_API_KEY`
+- `CONTENTSTACK_MANAGEMENT_TOKEN`
+- `CONTENTSTACK_USER_EMAIL`
+- `CONTENTSTACK_USER_PASSWORD`
+- `CONTENTSTACK_PUBLISH_ENVIRONMENT`
+
+**Monitoring:**
+- Dashboard at `/runs` shows 95%+ success rate, KPI trends
+- Run history appended to `public/run-history.json`
+- Alert if > 5% step failures in rolling 24h window
 
 ---
 
 ## Architecture
 
-### High-Level System Design
+### System Architecture
 
 ```mermaid
 graph TB
-    subgraph GitHub["GitHub Actions / Manual Trigger"]
-        TRIGGER["Periodic Scheduler<br/>Every 5 minutes"]
+    subgraph GitHub["GitHub / Manual Trigger"]
+        SCHED["Scheduler<br/>Every 5 min"]
+        MANUAL["Manual Workflow<br/>Dispatch"]
     end
     
-    subgraph Automation["Contentstack Metering Automation"]
-        DRIVE["drive-all.mjs<br/>Orchestrator"]
-        LIB["lib/cma.mjs<br/>CMA Helpers +<br/>Self-Healing"]
-        
-        BOOTSTRAP["Bootstrap Phase<br/>CTs, Locales,<br/>Branches, Workflows"]
-        PERIODIC["Periodic Phase<br/>Entry Lifecycle<br/>+ Meter Coverage"]
-        
-        DRIVE --> BOOTSTRAP
-        DRIVE --> PERIODIC
-        BOOTSTRAP --> LIB
-        PERIODIC --> LIB
+    subgraph App["Frontend App<br/>(Vite + React)"]
+        ENTRY["Entry Listing<br/>Delivery API"]
+        HERO["3D Hero<br/>Three.js"]
     end
     
-    subgraph Contentstack["Contentstack CMA"]
-        API["Management API<br/>REST"]
-        ORG["Org Admin<br/>Portal"]
+    subgraph Performance["Performance Testing"]
+        LAUNCH["Launch Warmup"]
+        HITTING["URL Hitting"]
     end
     
-    subgraph DataFlow["Data Pipeline"]
+    subgraph Automation["CMA Automation<br/>(19 scripts)"]
+        LIB["lib/cma.mjs<br/>CMA helpers +<br/>Self-healing"]
+        BOOT["Bootstrap Phase<br/>CTs, Locales,<br/>Workflows"]
+        PER["Periodic Phase<br/>Delete, Create,<br/>Localize, Publish"]
+        METER["Meter-Coverage<br/>6 scenarios"]
+        USERS["User Inviter<br/>10 users + roles"]
+    end
+    
+    subgraph Contentstack["Contentstack Stack"]
+        CMAAPI["Management API<br/>REST"]
+        DELAPI["Delivery API<br/>REST"]
+        ORGADMIN["Org Admin<br/>Portal"]
+    end
+    
+    subgraph Pipeline["Analytics Pipeline"]
         KAFKA["Kafka<br/>entry_created,<br/>entry_published,<br/>entry_workflow_*"]
         MONGO["Mongo<br/>analytics-data-sync<br/>snapshot"]
         ES["Elasticsearch<br/>METRIC_DATA_INDEX"]
+        DASH["Dashboards<br/>Content Lifecycle,<br/>Workflow Health,<br/>Team Adoption"]
     end
     
-    subgraph Analytics["Analytics Dashboards"]
-        DASH1["CMS Content<br/>Lifecycle"]
-        DASH2["Workflow<br/>Health"]
-        DASH3["Team<br/>Adoption"]
-    end
+    SCHED --> AUTOMATION
+    MANUAL --> AUTOMATION
     
-    LIB --> API
-    LIB --> ORG
-    API --> KAFKA
-    ORG --> KAFKA
+    ENTRY --> DELAPI
+    LAUNCH --> DELAPI
+    HITTING --> DELAPI
+    
+    BOOT --> CMAAPI
+    PER --> CMAAPI
+    METER --> CMAAPI
+    USERS --> ORGADMIN
+    
+    LIB --> CMAAPI
+    LIB --> ORGADMIN
+    
+    CMAAPI --> KAFKA
+    ORGADMIN --> KAFKA
+    
     KAFKA --> MONGO
     MONGO --> ES
-    ES --> DASH1
-    ES --> DASH2
-    ES --> DASH3
+    ES --> DASH
 ```
 
 ### Periodic Workflow
 
 ```mermaid
 graph TD
-    START["Start Periodic Run"]
+    START["Start Periodic Run<br/>10k entries planned"]
     
-    DELETE["Delete Old Entries<br/>Tiered Retention<br/>3 age bands"]
-    BACKFILL["Backfill from Trash<br/>Restore if below target"]
-    CREATE["Create 10k Entries<br/>Split across CTs<br/>Concurrent: 12"]
-    LOCALIZE["Localize to 5 Locales<br/>Auto-create if missing<br/>Concurrent: 6"]
-    PUBLISH["Publish/Unpublish<br/>60% / 15% ratio<br/>Batch: 100"]
-    TRANSITION["Workflow Transitions<br/>5 patterns<br/>Concurrent: 8"]
-    CHURN["Churn Orphan Cases<br/>Disable, Detach,<br/>Branch, Locale"]
-    BRANCH["Branch Lifecycle<br/>30-branch lineage<br/>Dynamic CTs"]
-    METER["Meter-Coverage<br/>Scenarios 6x<br/>Edit, Delete,<br/>Stall, No-WF, Actor, Orphan"]
-    INVITE["Invite 10 Users<br/>Playwright UI<br/>Auto-assign Roles"]
-    REPORT["Report KPIs<br/>Append run-history.json"]
-    END["End"]
+    DEL["1. Delete Old Entries<br/>Tiered Retention<br/>3 age bands"]
+    BACK["2. Backfill from Trash<br/>Restore if below target<br/>Preserves created_at"]
     
-    START --> DELETE
-    DELETE --> BACKFILL
-    BACKFILL --> CREATE
-    CREATE --> LOCALIZE
-    LOCALIZE --> PUBLISH
-    PUBLISH --> TRANSITION
-    TRANSITION --> CHURN
+    CREATE["3. Create 10k Entries<br/>Split across CTs<br/>Concurrency: 12<br/>Triggers: entry_created"]
+    LOCALE["4. Localize Entries<br/>5 non-master locales<br/>Auto-create if missing<br/>Triggers: entry_created x5"]
+    
+    PUBLISH["5. Publish/Unpublish<br/>60% / 15% ratio<br/>Batch: 100<br/>Triggers: entry_published"]
+    TRANS["6. Workflow Transitions<br/>5 patterns (linear, skip,<br/>rework, stall, firstOnly)<br/>Triggers: entry_workflow_*"]
+    
+    CHURN["7. Churn Orphan Cases<br/>Disable, Detach, Branch,<br/>Locale, $all, Restore"]
+    BRANCH["8. Branch Lifecycle<br/>30-branch lineage<br/>Dynamic CTs<br/>Multi-branch publish"]
+    
+    METER["9. Meter-Coverage (6x)<br/>- Edit-after-publish<br/>- Permanent-deletes<br/>- Aged-stalls<br/>- No-workflow-ct<br/>- Multi-actor<br/>- Branch-locale-deletion"]
+    
+    INVITE["10. Invite Users<br/>10 new users<br/>Playwright UI automation<br/>Auto-assign CMS roles"]
+    
+    REPORT["11. Report KPIs<br/>Append run-history.json<br/>Update dashboard /runs"]
+    
+    END["End<br/>~25 min total"]
+    
+    START --> DEL
+    DEL --> BACK
+    BACK --> CREATE
+    CREATE --> LOCALE
+    LOCALE --> PUBLISH
+    PUBLISH --> TRANS
+    TRANS --> CHURN
     CHURN --> BRANCH
     BRANCH --> METER
     METER --> INVITE
@@ -129,180 +395,176 @@ graph TD
     REPORT --> END
 ```
 
-### Multi-Actor Create-Publish Flow
-
-```mermaid
-sequenceDiagram
-    actor ActorA as Actor A<br/>Creator
-    participant Auto as Automation
-    participant CMA as Contentstack CMA
-    actor ActorB as Actor B<br/>Publisher
-    
-    ActorA->>Auto: Login
-    Auto->>CMA: Authenticate
-    CMA-->>Auto: authtoken (A)
-    
-    Auto->>CMA: Create Entries
-    CMA-->>Auto: Entry UIDs
-    Note over CMA: Emits entry_created
-    
-    Note over Auto: Auto-pick user B<br/>Auto-assign CMS role
-    
-    Auto->>CMA: Transition to Approved
-    CMA-->>Auto: Transitions ACKs
-    Note over CMA: Emits entry_workflow_*
-    
-    ActorB->>Auto: Login
-    Auto->>CMA: Authenticate
-    CMA-->>Auto: authtoken (B)
-    
-    Auto->>CMA: Publish Entries
-    CMA-->>Auto: Publish ACKs
-    Note over CMA: Emits entry_published<br/>user_uid = B (Publisher)
-    
-    Auto-->>ActorA: Report<br/>creator_uid: A<br/>publisher_uid: B
-```
-
-### Self-Healing: Missing CMS Role
-
-```mermaid
-sequenceDiagram
-    participant Auto as Automation
-    participant CMA as Contentstack CMA
-    participant Org as Org Admin
-    
-    Auto->>CMA: Auto-pick user from org
-    CMA-->>Auto: User object (no CMS role)
-    
-    Auto->>CMA: Check: hasRole?
-    CMA-->>Auto: false (no RBAC record)
-    
-    Auto->>CMA: List stack roles
-    CMA-->>Auto: [role_uid_1, role_uid_2, ...]
-    
-    Auto->>CMA: shareStack(email, role_uid)
-    CMA->>Org: Add RBAC record
-    Org-->>CMA: ✓ Success
-    CMA-->>Auto: shareStack ACK
-    
-    Note over Auto: User now has CMS role!
-    Auto->>CMA: Proceed with test
-```
-
 ---
 
-## Quick Start
+## Frontend App & Entry Listing
 
-### 1. Prerequisites
+### What It Does
 
-- **Node 24+** (native fetch, async/await)
-- **Contentstack stack** (API key + management token)
-- **User credentials** (for transitions, publishing, UI automation)
+The frontend is a **Vite + React web app** that:
+1. Fetches published entries from the Contentstack **Delivery API** (read-only)
+2. Lists all entries across specified content types
+3. Displays individual entries at `/entry/:contentTypeUid/:entryUid`
+4. Renders a 3D hero using **Three.js** via React Three Fiber
 
-### 2. Environment Setup
+### Why It Matters
+
+- Tests **Delivery API integration** (read path, not write)
+- Validates **published entries** (only published entries appear)
+- Exercises **entry rendering** at scale (1000s of entries)
+- Foundation for **Launch site warmup** and **URL hitting** performance tests
+
+### Setup
 
 ```bash
-# Copy environment template
+# 1. Copy environment template
 cp .env.example .env
 
-# Fill in required variables
-cat .env
-```
+# 2. Fill in Delivery API credentials
+VITE_CONTENTSTACK_API_KEY=your_stack_api_key
+VITE_CONTENTSTACK_DELIVERY_TOKEN=your_delivery_token
+VITE_CONTENTSTACK_ENVIRONMENT=production
+VITE_CONTENTSTACK_DELIVERY_HOST=https://cdn.contentstack.io
+VITE_CONTENTSTACK_CONTENT_TYPE_UIDS=demo_plain_text,demo_json_rte,demo_reference
 
-**Required:**
-```bash
-CONTENTSTACK_API_KEY=your_api_key
-CONTENTSTACK_MANAGEMENT_TOKEN=your_token
-CONTENTSTACK_PUBLISH_ENVIRONMENT=production
-CONTENTSTACK_USER_EMAIL=user@example.com
-CONTENTSTACK_USER_PASSWORD=password
-```
-
-**Optional (all have sensible defaults):**
-```bash
-# Retention policies (entries to keep per age band)
-CONTENTSTACK_RETENTION_TARGET_OVER_30D=5000
-CONTENTSTACK_RETENTION_TARGET_15_30D=10000
-CONTENTSTACK_RETENTION_TARGET_7_15D=20000
-
-# Concurrency & volumes
-CONTENTSTACK_PERIODIC_CONCURRENCY=12
-CONTENTSTACK_BRANCH_LINEAGE_COUNT=30
-CONTENTSTACK_INVITE_COUNT=10
-```
-
-See [AUTOMATION_FRAMEWORK.md](./AUTOMATION_FRAMEWORK.md) for complete config reference.
-
-### 3. Install & Run
-
-```bash
+# 3. Install and run dev server
 npm install
+npm run dev
 
-# Bootstrap (one-time: create CTs, locales, branches, workflows)
-node --env-file=.env scripts/drive-all.mjs --mode bootstrap
+# 4. Open http://localhost:5173
+```
 
-# Periodic (runs every 5 min in CI; safe to run anytime)
-node --env-file=.env scripts/drive-all.mjs --mode periodic
+### Key Routes
 
-# Or both at once
-node --env-file=.env scripts/drive-all.mjs --mode full
+| Route | Purpose |
+|-------|---------|
+| `/` | Home page (lists all published entries) |
+| `/entry/:contentTypeUid/:entryUid` | Single entry display |
+| `/runs` | Automation dashboard (KPIs, success rate, trends) |
+
+### Environment Variables (Frontend)
+
+```
+VITE_CONTENTSTACK_API_KEY              # Stack API key
+VITE_CONTENTSTACK_DELIVERY_TOKEN       # Delivery API read-only token
+VITE_CONTENTSTACK_ENVIRONMENT          # Environment uid (e.g., production)
+VITE_CONTENTSTACK_DELIVERY_HOST        # CDN URL (https://cdn.contentstack.io)
+VITE_CONTENTSTACK_CONTENT_TYPE_UIDS    # (Optional) CSV of CTs to list
+```
+
+### Build for Production
+
+```bash
+npm run build      # Outputs to dist/
+npm run preview    # Preview build locally
 ```
 
 ---
 
-## Scripts & Meter Mapping
+## Launch Site & URL Hitting
 
-### All 19 Scripts Overview
+### What It Does
 
-```mermaid
-graph LR
-    subgraph Bootstrap["Bootstrap Phase"]
-        B1["bootstrap-from-manifest"]
-        B2["seed-locales-branches"]
-        B3["seed-workflows"]
-        B4["seed-publishing-rules"]
-    end
-    
-    subgraph Periodic["Periodic Phase"]
-        P1["delete-old-entries"]
-        P2["backfill-aged-entries"]
-        P3["periodic-entries-from-manifest"]
-        P4["localize-entries"]
-        P5["bulk-publish-cycle"]
-        P6["seed-workflows"]
-        P7["churn-orphans"]
-        P8["branch-lifecycle"]
-    end
-    
-    subgraph Meter["Meter-Coverage Scenarios"]
-        M1["edit-after-publish"]
-        M2["permanent-deletes"]
-        M3["aged-stalls"]
-        M4["no-workflow-ct"]
-        M5["multi-actor-create-publish"]
-        M6["branch-locale-deletion"]
-    end
-    
-    subgraph Users["User Management"]
-        U1["invite-users"]
-    end
+Warms the **Delivery API cache** and tests **entry endpoint performance** by:
+1. Fetching the Launch site (primes CDN cache)
+2. Hitting entry list endpoint 100x (tests concurrent delivery)
+3. Hitting single-entry endpoints 100x (tests endpoint perf)
+4. Logging response times, cache status (hit/miss)
+
+### Why It Matters
+
+- Validates **Delivery API performance** under load
+- Tests **cache behavior** (CDN, edge, origin)
+- Provides a **baseline** for perf regression detection
+- Part of the **continuous validation** loop (runs after each automation run)
+
+### Setup
+
+```bash
+# Environment variables needed
+export LAUNCH_SITE_URL=https://your-launch-site.com
+export VITE_CONTENTSTACK_DELIVERY_HOST=https://cdn.contentstack.io
+export VITE_CONTENTSTACK_CONTENT_TYPE_UIDS=demo_plain_text
+
+# Run warmup
+npm run warm:launch-urls
+
+# Results logged to console + public/warmup-report.json
 ```
 
-### Meter Coverage Matrix
+### What Gets Tested
 
-| Meter Dimension | Script | Driver Event | Coverage |
-|-----------------|--------|--------------|----------|
-| **entries_created** — locale | localize-entries | Non-master locale localization | ✅ 5 locales × entries |
-| **entries_created** — content_type | periodic-entries-from-manifest | Create per CT | ✅ All CTs |
-| **entries_created** — branch | branch-lifecycle | Create on lineage branches | ✅ 30-branch lineage |
-| **entries_published** — user_uid | multi-actor-create-publish | Different creator/publisher | ✅ Distinct users |
-| **entries_in_progress** | edit-after-publish | Publish then edit without republish | ✅ Scenario-driven |
-| **entries_deleted** | permanent-deletes | Hard delete (not soft) | ✅ Scenario-driven |
-| **entries_without_workflow** | no-workflow-ct | Create on bare CT | ✅ Scenario-driven |
-| **stalled_by_stage** | aged-stalls | Entries stuck in mid-stages | ✅ 5+ stages |
-| **snapshot** — branch axis | branch-lifecycle + branch-locale-deletion | Lineage branch delete | ✅ Orphan handling |
-| **snapshot** — locale axis | branch-locale-deletion | Locale delete post-stage | ✅ Orphan handling |
-| **org_users** | invite-users | User invitation + role assignment | ✅ 10 users/run |
+```
+GET /entry/:contentTypeUid (list endpoint)
+  ├─ 100 concurrent fetches
+  └─ Logs: response time, cache header, status
+
+GET /entry/:contentTypeUid/:entryUid (single-entry endpoint)
+  ├─ 100 concurrent fetches
+  └─ Logs: response time, cache header, status
+
+GET https://launch-site (Launch site)
+  └─ Logs: response time, status
+```
+
+### Reports
+
+- **Console:** Real-time request counts, response codes
+- **public/warmup-report.json:** Aggregated stats (avg time, cache hits, failures)
+
+---
+
+## Automation Framework: CMA Lifecycle
+
+### Overview
+
+The **Contentstack Metering Automation Framework** is the core of this project. It:
+1. **Creates realistic content patterns** (10,000 entries/run, 30-branch lineage, 5 locales)
+2. **Drives all meter dimensions** (entry events, user events, branch events, workflow events)
+3. **Self-heals missing prerequisites** (auto-creates locales, workflows, user roles)
+4. **Maintains aged dataset** (tiered retention + backfill from trash)
+5. **Runs every 5 minutes in CI** (continuous validation of analytics pipelines)
+
+### 19 Scripts Overview
+
+#### Bootstrap Phase (One-Time Setup)
+
+| Script | Purpose |
+|--------|---------|
+| `bootstrap-from-manifest.mjs` | Create content types from manifest |
+| `seed-locales-branches.mjs` | Create locales (with fallback chains) + branches |
+| `seed-workflows.mjs` | Create 3 workflows with stages |
+| `seed-publishing-rules.mjs` | Create publishing rules for workflows |
+
+#### Periodic Phase (Every 5 Minutes)
+
+| Script | Purpose | Events Fired |
+|--------|---------|--------------|
+| `delete-old-entries.mjs` | Tiered retention (3 age bands, keep targets) | — |
+| `backfill-aged-entries.mjs` | Restore from trash if below targets | — |
+| `periodic-entries-from-manifest.mjs` | Create 10,000 entries across CTs | `entry_created` x 10k |
+| `localize-entries.mjs` | Localize to 5 non-master locales | `entry_created` x 50k |
+| `bulk-publish-cycle.mjs` | Publish 60% / unpublish 15% | `entry_published` x 6k |
+| `seed-workflows.mjs` | Transition entries through 5 patterns | `entry_workflow_*` x 2k |
+| `churn-orphans.mjs` | Edge cases (disable, detach, restore) | Various meter events |
+| `branch-lifecycle.mjs` | 30-branch lineage + dynamic CTs | Branch-related events |
+
+#### Meter-Coverage Scenarios (6x)
+
+| Script | Purpose | Meter Dimension |
+|--------|---------|-----------------|
+| `edit-after-publish.mjs` | Publish then edit without republish | `entries_in_progress` |
+| `permanent-deletes.mjs` | Hard delete entries (not soft) | `entries_deleted` |
+| `aged-stalls.mjs` | Entries stuck in mid-stages for 8+ days | `stalled_by_stage` |
+| `no-workflow-ct.mjs` | Create entries on bare CT (no workflow) | `entries_without_workflow` |
+| `multi-actor-create-publish.mjs` | Different creator/publisher | `entries_published.user_uid` |
+| `branch-locale-deletion.mjs` | Delete branch/locale after staging | Snapshot orphan axes |
+
+#### User Management
+
+| Script | Purpose |
+|--------|---------|
+| `invite-users.mjs` | Invite 10 new users via Playwright + auto-assign CMS roles |
 
 ---
 
@@ -310,75 +572,183 @@ graph LR
 
 ### Auto-Creation When Prerequisites Missing
 
+The automation **self-heals** by automatically creating missing prerequisites:
+
+```mermaid
+sequenceDiagram
+    participant Auto as Automation
+    participant CMA as Contentstack CMA
+    participant Org as Org Admin
+    
+    Auto->>CMA: Try to localize to en-gb
+    CMA-->>Auto: 422 "Language was not found"
+    
+    Note over Auto: Detect missing locale
+    Auto->>CMA: listLocales()
+    CMA-->>Auto: [en-us, en-ca, ...] (en-gb missing)
+    
+    Auto->>CMA: createLocale(code: en-gb, fallback: en-us)
+    CMA-->>Auto: 201 Created
+    
+    Note over Auto: Retry localization
+    Auto->>CMA: Localize to en-gb
+    CMA-->>Auto: 201 Success
+```
+
+### Healing Scenarios
+
 | Scenario | Auto-Healing | Result |
 |----------|--------------|--------|
-| Locale doesn't exist | Create with fallback chain (e.g., `en-gb→en-us`) | Localization succeeds |
-| Workflow not found | Create with default stages (Draft → Review → Approved) | Transitions work |
-| User has no CMS role | Assign role via `shareStack()` | User can publish/transition |
-| No trashed entries | Skip backfill gracefully | Retention targets loose |
-| Content type missing | Create with schema from manifest | Entries created |
+| Locale missing | Create locale with fallback chain | Localization succeeds |
+| Workflow missing | Create workflow with default stages (Draft → Review → Approved) | Transitions work |
+| User has no CMS role | Assign role via `shareStack()` API | User can publish/transition |
+| Content type missing | Create from manifest schema | Entries created |
+| No trashed entries | Skip backfill (no error) | Graceful degradation |
 
-**Key principle:** Every failure point has an auto-creation path. If a locale is missing, create it. If a user lacks a role, assign it. This eliminates manual prerequisite setup.
+### Key Principle
 
----
-
-## Configuration
-
-### Key Environment Variables
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `CONTENTSTACK_API_KEY` | — | Stack API key |
-| `CONTENTSTACK_MANAGEMENT_TOKEN` | — | CMA management token |
-| `CONTENTSTACK_USER_EMAIL` | — | User for transitions & publishing |
-| `CONTENTSTACK_USER_PASSWORD` | — | User password (2FA-capable) |
-| `CONTENTSTACK_PUBLISH_ENVIRONMENT` | — | Target environment (e.g., `production`) |
-| `CONTENTSTACK_PERIODIC_CONCURRENCY` | 12 | Parallel entry creates |
-| `CONTENTSTACK_RETENTION_TARGET_OVER_30D` | 5000 | Keep 5k entries > 30 days old |
-| `CONTENTSTACK_RETENTION_TARGET_15_30D` | 10000 | Keep 10k entries 15-30 days old |
-| `CONTENTSTACK_RETENTION_TARGET_7_15D` | 20000 | Keep 20k entries 7-15 days old |
-| `CONTENTSTACK_BRANCH_LINEAGE_COUNT` | 30 | Branches in lineage |
-| `CONTENTSTACK_INVITE_COUNT` | 10 | Users to invite per run |
-
-**Full reference:** See [AUTOMATION_FRAMEWORK.md](./AUTOMATION_FRAMEWORK.md) → Configuration section.
+**Every failure point has a self-healing path.** If a prerequisite is missing, the automation creates it automatically instead of failing. This eliminates manual setup and allows the automation to work on any Contentstack stack.
 
 ---
 
-## Running the Automation
+## Complete Configuration Reference
 
-### Bootstrap (One-Time Setup)
+### Environment Variables (All)
 
-Creates all content foundations on a fresh stack:
+#### Frontend (VITE_*)
 
 ```bash
+VITE_CONTENTSTACK_API_KEY              # Stack API key (required)
+VITE_CONTENTSTACK_DELIVERY_TOKEN       # Delivery API token (required)
+VITE_CONTENTSTACK_ENVIRONMENT          # Environment uid (required)
+VITE_CONTENTSTACK_DELIVERY_HOST        # CDN URL (required)
+VITE_CONTENTSTACK_CONTENT_TYPE_UIDS    # CSV of CTs to list (optional; defaults to top_url_lines)
+```
+
+#### Automation (CONTENTSTACK_*)
+
+**Required:**
+```bash
+CONTENTSTACK_API_KEY                   # Stack API key
+CONTENTSTACK_MANAGEMENT_TOKEN          # CMA management token
+CONTENTSTACK_PUBLISH_ENVIRONMENT       # Target environment for publish
+CONTENTSTACK_USER_EMAIL                # User email for transitions/publishing/UI
+CONTENTSTACK_USER_PASSWORD             # User password (2FA-capable)
+```
+
+**Retention Policies (Defaults):**
+```bash
+CONTENTSTACK_RETENTION_TARGET_OVER_30D=5000      # Keep 5k entries > 30 days old
+CONTENTSTACK_RETENTION_TARGET_15_30D=10000       # Keep 10k entries 15-30 days old
+CONTENTSTACK_RETENTION_TARGET_7_15D=20000        # Keep 20k entries 7-15 days old
+```
+
+**Concurrency & Volume (Defaults):**
+```bash
+CONTENTSTACK_PERIODIC_CONCURRENCY=12             # Parallel entry creates
+CONTENTSTACK_DELETE_CONCURRENCY=10               # Parallel deletes
+CONTENTSTACK_BRANCH_LINEAGE_COUNT=30             # Branches in lineage
+CONTENTSTACK_BRANCH_ENTRIES_PER_CT=50            # Entries per branch
+CONTENTSTACK_INVITE_COUNT=10                     # Users to invite per run
+CONTENTSTACK_BRANCH_CHURN_PERCENTAGE=0.2         # Disable/detach as % (not delete)
+```
+
+**Publish Ratios (Defaults):**
+```bash
+CONTENTSTACK_PUBLISH_RATIO=0.6                   # 60% of created entries to publish
+CONTENTSTACK_UNPUBLISH_RATIO=0.15                # 15% to unpublish
+```
+
+**Optional:**
+```bash
+CONTENTSTACK_MANAGEMENT_HOST=https://api.contentstack.io   # CMA host
+CONTENTSTACK_BRANCH=main                                    # Branch to use
+CONTENTSTACK_LOCALE=en-us                                   # Master locale
+```
+
+### Quick Setup Script
+
+```bash
+cat > .env << 'EOF'
+# Frontend
+VITE_CONTENTSTACK_API_KEY=your_api_key
+VITE_CONTENTSTACK_DELIVERY_TOKEN=your_delivery_token
+VITE_CONTENTSTACK_ENVIRONMENT=production
+VITE_CONTENTSTACK_DELIVERY_HOST=https://cdn.contentstack.io
+
+# Automation
+CONTENTSTACK_API_KEY=your_api_key
+CONTENTSTACK_MANAGEMENT_TOKEN=your_mgmt_token
+CONTENTSTACK_PUBLISH_ENVIRONMENT=production
+CONTENTSTACK_USER_EMAIL=user@example.com
+CONTENTSTACK_USER_PASSWORD=password
+
+# Retention (optional - uses defaults if not set)
+CONTENTSTACK_RETENTION_TARGET_OVER_30D=5000
+CONTENTSTACK_RETENTION_TARGET_15_30D=10000
+CONTENTSTACK_RETENTION_TARGET_7_15D=20000
+
+# Concurrency (optional - uses defaults if not set)
+CONTENTSTACK_PERIODIC_CONCURRENCY=12
+CONTENTSTACK_BRANCH_LINEAGE_COUNT=30
+CONTENTSTACK_INVITE_COUNT=10
+EOF
+```
+
+---
+
+## Running Everything
+
+### Frontend App
+
+```bash
+# Development
+npm install
+npm run dev              # http://localhost:5173
+
+# Production build
+npm run build            # Outputs to dist/
+npm run preview          # Preview build
+
+# Linting
+npm run lint
+```
+
+### Launch Site Warmup
+
+```bash
+# Warm Delivery API and entry endpoints
+npm run warm:launch-urls
+
+# Logs to console + public/warmup-report.json
+```
+
+### Automation Framework
+
+```bash
+# BOOTSTRAP (one-time: creates CTs, locales, workflows, branches)
 node --env-file=.env scripts/drive-all.mjs --mode bootstrap
-```
 
-**Creates:**
-- 5 content types (demo_plain_text, demo_json_rte, demo_reference, demo_group, demo_blocks)
-- 5 locales with fallback chains (en-gb, fr-fr, fr-ca, de-de, de-at)
-- 3 branches (main, staging, develop)
-- 3 workflows (Editorial Review, Marketing Approval, Quick Publish)
-
-### Periodic (Every 5 Minutes)
-
-Drives the full lifecycle: delete → backfill → create → localize → publish → transition → churn → branch.
-
-```bash
+# PERIODIC (every 5 min: full lifecycle, 10k entries, all meter coverage)
 node --env-file=.env scripts/drive-all.mjs --mode periodic
-```
 
-**Completes in:** ~25 minutes  
-**Creates:** 10,000+ entries, 50,000+ localization events, 6,000 publish/unpublish events  
-**Drives:** All meter dimensions
-
-### Full (Bootstrap + Periodic)
-
-For fresh stack setup in one go:
-
-```bash
+# FULL (bootstrap + periodic in one go)
 node --env-file=.env scripts/drive-all.mjs --mode full
+
+# DRY-RUN (preview what would happen)
+node --env-file=.env scripts/drive-all.mjs --mode periodic --dry-run
 ```
+
+### Performance Targets
+
+| Phase | Volume | Concurrency | Duration |
+|-------|--------|-------------|----------|
+| Create entries | 10,000 | 12 | ~5 min |
+| Localize | 50,000 (5 locales) | 6 | ~8 min |
+| Publish | 6,000 | 10 | ~3 min |
+| Delete | 6,000 | 10 | ~3 min |
+| Transitions | 2,000 | 8 | ~2 min |
+| **Periodic run total** | — | — | **~25 min** |
 
 ---
 
@@ -386,7 +756,7 @@ node --env-file=.env scripts/drive-all.mjs --mode full
 
 ### Dashboard
 
-After the first run, navigate to `/runs` to see:
+After the first automation run, a dashboard appears at **http://localhost:5173/runs** showing:
 
 **Reliability:**
 - Success rate (aim: 95%+)
@@ -394,18 +764,18 @@ After the first run, navigate to `/runs` to see:
 - p95 run duration
 
 **Entries Lifecycle:**
-- Created, deleted, localized, published counts
+- Created, deleted, localized counts
 - Per-age-band retention targets
 - Net entry growth
 
 **Meter Coverage:**
-- Per-scenario KPI tracking
-- Edit-after-publish, permanent-deletes, aged-stalls, etc.
+- Per-scenario KPI tracking (edit-after-publish, permanent-deletes, aged-stalls, etc.)
+- Dimension coverage matrix
 
 **Errors & Gaps:**
 - Failure log with root cause
 - Missing dimensions
-- Step failure tracking
+- Step-by-step failure tracking
 
 ### Run History
 
@@ -413,7 +783,7 @@ KPIs appended to `public/run-history.json` after each run:
 - Timestamp, mode (bootstrap/periodic/full)
 - Per-step planned/actual/failed counts
 - Aggregated KPIs
-- Error audit log (step name + error message)
+- Error audit log
 
 ---
 
@@ -450,13 +820,364 @@ jobs:
           CONTENTSTACK_USER_PASSWORD: ${{ secrets.CONTENTSTACK_USER_PASSWORD }}
 ```
 
-### Secrets Setup
+### Setting Up Secrets
 
 On GitHub → Settings → Secrets and variables → Actions, add:
 - `CONTENTSTACK_API_KEY`
 - `CONTENTSTACK_MANAGEMENT_TOKEN`
+- `CONTENTSTACK_PUBLISH_ENVIRONMENT`
 - `CONTENTSTACK_USER_EMAIL`
 - `CONTENTSTACK_USER_PASSWORD`
+
+---
+
+## All Scripts Reference
+
+### Bootstrap Phase
+
+#### bootstrap-from-manifest.mjs
+Creates content types from `scripts/content-types.manifest.json`.
+```bash
+node --env-file=.env scripts/bootstrap-from-manifest.mjs
+```
+**Creates:** All content types, with schema from manifest
+**Output:** CT count, creation times
+
+#### seed-locales-branches.mjs
+Creates locales with fallback chains + branches.
+```bash
+node --env-file=.env scripts/seed-locales-branches.mjs
+```
+**Creates:** 5 locales (en-gb→en-us, fr-fr→en-us, fr-ca→fr-fr, de-de→en-us, de-at→de-de) + 3 branches
+**Output:** Locale codes, branch UIDs
+
+#### seed-workflows.mjs
+Creates 3 workflows with stages: Editorial Review, Marketing Approval, Quick Publish.
+```bash
+node --env-file=.env scripts/seed-workflows.mjs
+```
+**Creates:** 3 workflows, stages, publishing permissions
+**Output:** Workflow UIDs, stage counts
+
+#### seed-publishing-rules.mjs
+Creates publishing rules for workflows across all content types.
+```bash
+node --env-file=.env scripts/seed-publishing-rules.mjs
+```
+**Creates:** Publishing rules for each workflow-stage-CT combo
+**Output:** Rule count, stage mappings
+
+---
+
+### Periodic Phase
+
+#### delete-old-entries.mjs
+Tiered retention: deletes oldest excess in each age band.
+```bash
+node --env-file=.env scripts/delete-old-entries.mjs
+```
+**Targets:** >30d (keep 5k), 15-30d (keep 10k), 7-15d (keep 20k)
+**Output:** Deletions per band, total deleted
+
+#### backfill-aged-entries.mjs
+Restores from trash if entry count in any band falls below target.
+```bash
+node --env-file=.env scripts/backfill-aged-entries.mjs
+```
+**Targets:** Restore to target counts if below threshold
+**Output:** Restored count per band, preserved created_at
+
+#### periodic-entries-from-manifest.mjs
+Creates 10,000 entries across all content types (concurrent creation).
+```bash
+node --env-file=.env scripts/periodic-entries-from-manifest.mjs
+```
+**Creates:** ~10k entries (split evenly across CTs)
+**Concurrency:** 12 parallel creates
+**Output:** Created count per CT, total, failures
+
+#### localize-entries.mjs
+Localizes newest entries to 5 non-master locales (auto-creates missing locales).
+```bash
+node --env-file=.env scripts/localize-entries.mjs
+```
+**Targets:** 5 locales, auto-create if missing
+**Output:** Localized count per locale, failures
+
+#### bulk-publish-cycle.mjs
+Publishes 60% / unpublishes 15% of created entries.
+```bash
+node --env-file=.env scripts/bulk-publish-cycle.mjs
+```
+**Ratios:** 60% publish, 15% unpublish
+**Output:** Published, unpublished counts
+
+#### seed-workflows.mjs (Periodic Run)
+Transitions entries through 5 workflow patterns (linear, skip, rework, stall, firstOnly).
+```bash
+node --env-file=.env scripts/seed-workflows.mjs
+```
+**Patterns:** 5 (each with weighted distribution)
+**Output:** Transitions per pattern, total transitioned
+
+#### churn-orphans.mjs
+Edge cases: disable/detach workflows, branch/locale operations, entry restore.
+```bash
+node --env-file=.env scripts/churn-orphans.mjs
+```
+**Operations:** Disable, detach, branch create/delete, locale delete, restore
+**Output:** Operation counts per type, success rates
+
+#### branch-lifecycle.mjs
+30-branch lineage with dynamic content types, multi-branch publish rules.
+```bash
+node --env-file=.env scripts/branch-lifecycle.mjs
+```
+**Lineage:** 30 branches (bl-{timestamp}-1 through -30), inherited from previous
+**Dynamic CTs:** 10 per run
+**Output:** Branch count, entries per branch, CT+rule counts
+
+---
+
+### Meter-Coverage Scenarios
+
+#### edit-after-publish.mjs
+Publish entry, then edit without republishing → drives `entries_in_progress`.
+```bash
+node --env-file=.env scripts/edit-after-publish.mjs
+```
+**Meter:** entries_in_progress dimension
+**Output:** Published count, edited-in-place count
+
+#### permanent-deletes.mjs
+Hard delete entries (not soft) → drives `entries_deleted`.
+```bash
+node --env-file=.env scripts/permanent-deletes.mjs
+```
+**Meter:** entries_deleted dimension
+**Output:** Created count, deleted count
+
+#### aged-stalls.mjs
+Create entries, transition to mid-stages, leave stalled → drives `stalled_by_stage`.
+```bash
+node --env-file=.env scripts/aged-stalls.mjs
+```
+**Meter:** stalled_by_stage dimension (entries stuck in non-terminal stages)
+**Output:** Created count, stalled count per stage
+
+#### no-workflow-ct.mjs
+Create entries on content type with NO workflow → drives `entries_without_workflow`.
+```bash
+node --env-file=.env scripts/no-workflow-ct.mjs
+```
+**Meter:** entries_without_workflow dimension
+**Output:** CT created, entries created (no workflow transitions)
+
+#### multi-actor-create-publish.mjs
+Actor A creates entries, Actor B publishes → distinct `entries_published.user_uid`.
+```bash
+node --env-file=.env scripts/multi-actor-create-publish.mjs
+```
+**Meter:** entries_published.user_uid dimension (creator ≠ publisher)
+**Output:** Created count (actor A), published count (actor B), distinct user count
+
+#### branch-locale-deletion.mjs
+Stage entries on feature branch/non-default locale, delete → snapshot orphan axes.
+```bash
+node --env-file=.env scripts/branch-locale-deletion.mjs
+```
+**Meter:** Snapshot branch_uid and locale_code axes (orphan-drop validation)
+**Output:** Branch deleted count, locale deleted count, orphaned entries
+
+---
+
+### User Management
+
+#### invite-users.mjs
+Invite 10 new users via Playwright + auto-assign CMS roles.
+```bash
+node --env-file=.env scripts/invite-users.mjs
+```
+**Users:** 10 new invitations per run (unique emails)
+**Roles:** Auto-assigned CMS role (Developer/Contributor)
+**Output:** Invited count, role-assigned count, failures
+
+---
+
+## Low-Level Design & Algorithms
+
+### Entry Creation with Concurrency
+
+```javascript
+CREATE_ENTRIES(concurrency = 12) {
+  pool = createWorkerPool(concurrency)
+  for (ct in contentTypes) {
+    entries_to_create = CONTENTSTACK_PERIODIC_TOTAL / len(contentTypes)
+    
+    while (entries_to_create > 0) {
+      batch = entries_to_create.slice(0, concurrency)
+      
+      for (entry in batch) parallel {
+        title = generate_unique_title()
+        fields = resolve_placeholders(fields)
+        
+        result = POST /v3/content_types/{ct}/entries {
+          entry: { title, ...fields }
+        }
+        
+        if result.ok {
+          kpis.created++
+        } else if result.error == 133 { // org entry cap
+          kpis.capHit++
+          stop_creation()
+        } else {
+          kpis.failed++
+        }
+      }
+      
+      entries_to_create -= batch.length
+      sleep(100ms) // brief pause before next batch
+    }
+  }
+  
+  report(kpis)
+}
+```
+
+### Tiered Retention Algorithm
+
+```javascript
+TIERED_RETENTION() {
+  now = Date.now()
+  
+  bands = [
+    { name: ">30d",   min_age: 30*day,  max_age: ∞,       keep: 5000  },
+    { name: "15-30d", min_age: 15*day,  max_age: 30*day,  keep: 10000 },
+    { name: "7-15d",  min_age: 7*day,   max_age: 15*day,  keep: 20000 },
+  ]
+  
+  for (ct in contentTypes) {
+    for (band in bands) {
+      entries = GET /entries {
+        query: {
+          created_at: {
+            $gte: now - band.max_age,
+            $lt:  now - band.min_age
+          }
+        },
+        include_count: true
+      }
+      
+      count = entries.length
+      excess = max(0, count - band.keep)
+      
+      if excess > 0 {
+        to_delete = entries.sort_by(created_at).slice(0, excess)
+        
+        for (entry in to_delete) parallel {
+          DELETE /entries/{uid}
+          kpis.deleted++
+          kpis.bands[band.name]++
+        }
+      }
+    }
+  }
+  
+  report(kpis)
+}
+```
+
+### Backfill from Trash
+
+```javascript
+BACKFILL_AGED_ENTRIES() {
+  now = Date.now()
+  
+  bands = [
+    { name: ">30d",   start_age: 30*day,  end_age: 100*day, target: 5000  },
+    { name: "15-30d", start_age: 15*day,  end_age: 30*day,  target: 10000 },
+    { name: "7-15d",  start_age: 7*day,   end_age: 15*day,  target: 20000 },
+  ]
+  
+  for (band in bands) {
+    trashed = GET /entries {
+      query: {
+        created_at: {
+          $gte: now - band.end_age,
+          $lt:  now - band.start_age
+        },
+        _metadata: { deleted_at: { $exists: true } }
+      }
+    }
+    
+    count = trashed.length
+    deficit = max(0, band.target - count)
+    
+    if deficit == 0 {
+      continue // band is full
+    }
+    
+    to_restore = trashed.slice(0, deficit)
+    
+    for (entry in to_restore) parallel {
+      result = PUT /entries/{uid}/restore {
+        entry: { locale }
+      }
+      
+      if result.ok {
+        kpis.restored++
+      }
+    }
+  }
+  
+  report(kpis)
+}
+```
+
+### Workflow Transition with 5 Patterns
+
+```javascript
+WORKFLOW_TRANSITIONS(rng_seed) {
+  rng = mulberry32(rng_seed) // deterministic
+  
+  patterns = {
+    linear:      [0, 1, 2],           // Draft → Review → Approved
+    skip:        [0, 2],              // Draft → Approved (skip Review)
+    rework:      [0, 1, 0, 1, 2],    // Draft → Review → Draft → Review → Approved
+    partialStall: [0, 1],             // Draft → Review (stuck)
+    firstOnly:   [0],                 // Draft only (no transition)
+  }
+  
+  weights = DEFAULT_PATTERN_WEIGHTS // {linear: 0.3, skip: 0.1, ...}
+  
+  for (entry in entries) {
+    pattern = pick_weighted(patterns, weights, rng)
+    stops = pattern.map(idx => stages[idx])
+    
+    for (stop in stops) {
+      result = PUT /entries/{uid}/transition {
+        _workflow: {
+          workflow_uid: wf.uid,
+          stage_uid: stop.uid,
+          assigned_to: [user],
+          comment: `auto:${pattern}:${stop.name}`
+        }
+      }
+      
+      if result.ok {
+        kpis.transitions++
+      } else if result.status == 422 {
+        // transit not allowed from current stage
+        kpis.transitionsSkipped++
+      } else {
+        kpis.failed++
+      }
+    }
+  }
+  
+  report(kpis)
+}
+```
 
 ---
 
@@ -464,60 +1185,92 @@ On GitHub → Settings → Secrets and variables → Actions, add:
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| "Language was not found (422)" | Locale missing | Auto-created; wait for next run |
-| "Workflow not found" | Workflow missing | Auto-created; wait for next run |
-| "Access denied (401)" | User lacks CMS role | Auto-assigned; run automation again |
+| "Language was not found (422)" | Locale doesn't exist | Auto-created on next run |
+| "Workflow not found" | Workflow doesn't exist | Auto-created on next run |
+| "Access denied (401)" | User lacks CMS role | Auto-assigned on next run |
 | "Entries > 7d all deleted" | Retention too aggressive | Backfill restores from trash |
-| "No trashed entries" | Never created entries to delete | Skip backfill gracefully |
+| "No trashed entries" | Never created entries to delete | Graceful skip (no error) |
+| "Entry cap hit (133)" | Org entry limit reached | Graceful stop, resume next run |
+| "Entries > 30d deleted" | Tiered retention working as intended | Backfill restores to target |
 
-**Full troubleshooting guide:** See [AUTOMATION_FRAMEWORK.md](./AUTOMATION_FRAMEWORK.md) → Troubleshooting section.
+### Debug Mode
 
----
+```bash
+# Dry-run (preview what would happen, no API writes)
+node --env-file=.env scripts/drive-all.mjs --mode periodic --dry-run
 
-## Documentation
+# Check logs
+tail -f public/run-history.json
+cat public/warmup-report.json
+```
 
-Deep dives available in dedicated docs:
+### Performance Checklist
 
-| Document | Contents |
-|----------|----------|
-| [**AUTOMATION_FRAMEWORK.md**](./AUTOMATION_FRAMEWORK.md) | 19 scripts overview, self-healing matrix, meter mapping, config reference, troubleshooting, architecture decisions |
-| [**DESIGN.md**](./DESIGN.md) | HLD/LLD, sequence diagrams, algorithms (pseudocode), code structure, error handling, performance metrics, security |
-| [**PRD.md**](./PRD.md) | Problem statement, 15 functional requirements, 7 non-functional requirements, 4 user stories, success metrics, risk mitigation, timeline, rollout plan |
-
----
-
-## Performance Targets
-
-| Operation | Volume | Concurrency | Duration |
-|-----------|--------|-------------|----------|
-| Create entries | 10,000 | 12 | ~5 min |
-| Localize | 50,000 (5 locales × 10k entries) | 6 | ~8 min |
-| Publish | 6,000 | 10 | ~3 min |
-| Delete | 6,000 | 10 | ~3 min |
-| Transitions | 2,000 | 8 | ~2 min |
-| **Periodic run** | — | — | **~25 min** |
-
-**Memory:** ~200MB heap  
-**CPU:** 1 core (CI runner: 2GB, 2 cores recommended)
+- ✅ Periodic runs complete in ~25 min (else tune concurrency env vars)
+- ✅ Dashboard shows 95%+ success rate
+- ✅ Delivery API response times stable (check `public/warmup-report.json`)
+- ✅ Mongo snapshot updated nightly (check analytics-data-sync logs)
+- ✅ Elasticsearch METRIC_DATA_INDEX has events (check ES cluster)
+- ✅ Analytics dashboards populated (CMS Content Lifecycle, Workflow Health, Team Adoption)
 
 ---
 
-## Security Considerations
+## Project Structure
 
-- **Tokens:** Stored in GitHub Actions secrets, never logged
-- **User credentials:** Used only for session auth, cleared on exit
-- **Rate limiting:** Respects Contentstack CMA 10 req/sec soft limit with backoff
-- **Audit trail:** Every operation logged to `public/run-history.json` with timestamp
-
----
-
-## Architecture Decisions
-
-See [PRD.md](./PRD.md) → Open Questions & Decisions for rationale on:
-- **Delete oldest or random?** → Oldest first (maintains time-series integrity)
-- **Restore or recreate aged entries?** → Restore from trash (preserves created_at)
-- **User invitation method?** → Playwright UI automation (free, no company-repo changes)
-- **Churn as delete or disable?** → Disable/detach as % (preserves data for analytics)
+```
+/
+├── src/                        # Frontend (Vite + React)
+│   ├── pages/
+│   │   ├── EntryPage.jsx       # Single entry display
+│   │   ├── RunsDashboard.jsx   # Automation KPIs dashboard
+│   │   └── Home.jsx            # Entry listing
+│   ├── components/
+│   │   └── Hero.jsx            # Three.js 3D hero
+│   ├── App.jsx                 # Main app
+│   └── main.jsx                # Entry point
+│
+├── scripts/                    # Automation framework
+│   ├── drive-all.mjs           # Orchestrator (bootstrap/periodic/full)
+│   ├── bootstrap-from-manifest.mjs
+│   ├── seed-locales-branches.mjs
+│   ├── seed-workflows.mjs
+│   ├── seed-publishing-rules.mjs
+│   ├── delete-old-entries.mjs
+│   ├── backfill-aged-entries.mjs
+│   ├── periodic-entries-from-manifest.mjs
+│   ├── localize-entries.mjs
+│   ├── bulk-publish-cycle.mjs
+│   ├── churn-orphans.mjs
+│   ├── branch-lifecycle.mjs
+│   ├── edit-after-publish.mjs
+│   ├── permanent-deletes.mjs
+│   ├── aged-stalls.mjs
+│   ├── no-workflow-ct.mjs
+│   ├── multi-actor-create-publish.mjs
+│   ├── branch-locale-deletion.mjs
+│   ├── invite-users.mjs
+│   ├── warm-launch-urls.mjs
+│   ├── lib/
+│   │   ├── cma.mjs             # CMA helpers + self-healing
+│   │   ├── progress.mjs
+│   │   ├── report.mjs
+│   │   ├── workflow-patterns.mjs
+│   │   └── ...
+│   └── manifests/
+│       ├── content-types.manifest.json
+│       ├── workflows.manifest.json
+│       ├── locales-branches.manifest.json
+│       └── publishing-rules.manifest.json
+│
+├── public/                     # Static + runtime outputs
+│   ├── run-history.json        # Automation KPI history
+│   └── warmup-report.json      # Delivery API perf report
+│
+├── .env.example                # Environment template
+├── package.json
+├── vite.config.js
+└── README.md                   # This file
+```
 
 ---
 
@@ -527,5 +1280,5 @@ Internal Contentstack project. See LICENSE file.
 
 ---
 
-**Questions?** See the detailed docs or open an issue.
+**Status:** Production-ready. Runs continuously in CI every 5 minutes.
 
