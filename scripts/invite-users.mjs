@@ -3,13 +3,19 @@
  * invite-users.mjs — invite N new users to the organization via API.
  *
  * Uses the org-admin API to directly invite users instead of Playwright UI automation.
+ * Still requires user email+password (for user session auth, just like Playwright did),
+ * but replaces brittle UI with direct API calls.
  * Invitations auto-accept if users are already active, otherwise stay pending.
  * Assigns both org-level member role and stack-level CMS role.
+ *
+ * Auth: requires CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD
+ *   (+ CONTENTSTACK_USER_TOTP_SECRET for 2FA users)
+ *   Optional: CONTENTSTACK_USER_AUTHTOKEN (use instead of email+password)
  *
  * Env knobs:
  *   CONTENTSTACK_INVITE_COUNT        — users to invite per run (default 10)
  *   CONTENTSTACK_INVITE_EMAIL_DOMAIN — domain for generated emails (default test.contentstack.com)
- *   CONTENTSTACK_ORG_UID             — organization UID (derived from user's org if not set)
+ *   CONTENTSTACK_ORG_UID             — organization UID (auto-derived from user if not set)
  *
  * Usage:
  *   node --env-file=.env scripts/invite-users.mjs
@@ -103,14 +109,20 @@ async function main() {
   const tokens = loadManagementTokens()
   const mgmtHeaders = headersForToken(apiKey, tokens[0], branch)
 
+  // Get user session headers (needed for org API calls)
+  console.log('Loading user session...')
+  const userHeaders = await tryLoadUserSessionHeaders(base, apiKey, branch)
+  if (!userHeaders) {
+    throw new Error(
+      'Could not load user session. Set CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD\n' +
+      '(+ CONTENTSTACK_USER_TOTP_SECRET for 2FA), or CONTENTSTACK_USER_AUTHTOKEN.'
+    )
+  }
+
   // Get org UID from env or derive from user
   let orgUid = optionalEnv('CONTENTSTACK_ORG_UID')
   if (!orgUid) {
     console.log('CONTENTSTACK_ORG_UID not set, deriving from user...')
-    const userHeaders = await tryLoadUserSessionHeaders(base, apiKey, branch)
-    if (!userHeaders) {
-      throw new Error('Could not load user session headers to derive org UID')
-    }
     orgUid = await getUserOrgUid(base, userHeaders)
     if (!orgUid) {
       throw new Error('Could not determine organization UID from user')
@@ -124,7 +136,7 @@ async function main() {
   console.log(`  org: ${orgUid}`)
 
   try {
-    const { invited, failed } = await inviteUsersViaAPI(base, mgmtHeaders, orgUid, count, emailDomain)
+    const { invited, failed } = await inviteUsersViaAPI(base, userHeaders, orgUid, count, emailDomain)
 
     console.log(`\n✓ invited ${invited.length}/${count} users to organization`)
     if (failed.length > 0) {
@@ -137,7 +149,6 @@ async function main() {
     // Auto-assign CMS roles to invited users
     if (invited.length > 0) {
       console.log(`\n🔐 assigning stack CMS roles to invited users...`)
-      const userHeaders = await tryLoadUserSessionHeaders(base, apiKey, branch)
       let rolesAssigned = 0
 
       for (const invitedEmail of invited) {
