@@ -78,34 +78,39 @@ This framework automates complex content lifecycle patterns in Contentstack to:
     └────────────────────────────────────────────┘
 ```
 
-### Data Flow
+### Data Flow (This Repo Only)
+
+**This repository performs CMA operations. Downstream systems handle analytics pipeline.**
 
 ```
-Contentstack CMA
+Automation Operations (This Repo)
     │
-    ├─ Create Entries ──────► Mongo (analytics-data-sync snapshot)
+    ├─ Create Entries ───────► Triggers entry_created events
     │
-    ├─ Delete Entries ───────► Mongo (retention, is_deleted flag)
+    ├─ Delete Entries ───────► Triggers entry_deleted events
     │
-    ├─ Restore Entries ──────► Mongo (recovery, updated_at bump)
+    ├─ Restore Entries ──────► Triggers entry_restored events
     │
-    ├─ Transition Workflows ─► Kafka (entry_workflow_stage_* events)
+    ├─ Transition Workflows ─► Triggers entry_workflow_stage_* events
     │
-    ├─ Publish/Unpublish ───► Kafka (entry_published, entry_unpublished)
+    ├─ Publish/Unpublish ───► Triggers entry_published/unpublished events
     │
-    ├─ Localize Entries ────► Kafka (entry_created with locale dimension)
+    ├─ Localize Entries ────► Triggers entry_created (with locale dimension)
     │
-    ├─ User Invitations ────► Org (user_created, role assignment)
+    ├─ User Invitations ────► Triggers user_created, role assignment events
     │
-    └─ Branch Operations ───► Kafka (orphan events, lineage tracking)
+    └─ Branch Operations ───► Triggers branch-related events
                 │
                 ▼
-        analytics-data-sync (nightly cron)
+    [Events go to Contentstack infrastructure]
                 │
-        ┌───────┴──────────┐
-        ▼                  ▼
-   Elasticsearch       Dashboards
-  (METRIC_DATA_INDEX)  (CMS KPIs)
+    ┌───────────┴──────────────┐
+    │ Downstream (Not our repo)│
+    ├───────────┬──────────────┤
+    ▼           ▼              ▼
+  Kafka    Mongo         External Systems
+(consumed) (analytics-   (dashboards,
+            data-sync)    reporting)
 ```
 
 ---

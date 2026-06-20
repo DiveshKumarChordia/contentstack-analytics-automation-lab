@@ -7,7 +7,7 @@
 ## 1. Product Overview
 
 ### Purpose
-Automate comprehensive Contentstack CMA testing and realistic content lifecycle simulation to drive meter events across all dimensions, validating that analytics pipelines accurately track and measure platform usage.
+Automate comprehensive Contentstack CMA testing and realistic content lifecycle simulation to drive comprehensive meter events across all dimensions, providing the data and events needed for downstream analytics systems to track and measure platform usage.
 
 ### Problem Statement
 - Analytics dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption) depend on metering events from CMA operations
@@ -191,7 +191,7 @@ Build self-healing automation that:
 - Deploy automation to staging environment
 - Run 24h validation (100+ runs, check for regressions)
 - Verify all 6 meter-coverage scenarios pass
-- Confirm analytics pipelines receive events
+- Confirm all meter dimensions covered in automation KPIs
 
 ### Phase B: Production
 

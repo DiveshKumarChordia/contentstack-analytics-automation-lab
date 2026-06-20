@@ -52,20 +52,24 @@
     └────────────────────────────────────────────────────────────────────┘
           │              │                 │
           ▼              ▼                 ▼
-    ┌──────────┐  ┌──────────┐      ┌─────────────┐
-    │  Kafka   │  │  Mongo   │      │  public/    │
-    │  Events  │  │ (Snap)   │      │ run-history │
-    │          │  │          │      │             │
-    └────┬─────┘  └────┬─────┘      └──────┬──────┘
-         │             │                    │
-         └─────────────┼────────────────────┘
-                       │
-                       ▼
-            ┌──────────────────────┐
-            │ analytics-data-sync  │
-            │ (Nightly cron)       │
-            │ Spark → ES → Metrics │
-            └──────────────────────┘
+    ┌──────────────────────────────┐
+    │  Our Automation (This Repo)   │
+    │  CMA Operations              │
+    │  ✓ Create, Publish, Delete   │
+    │  ✓ Transition Workflows      │
+    │  ✓ Localize, Branch, etc.    │
+    └────────────┬─────────────────┘
+                 │
+         ┌───────┴──────────┐
+         │ Triggers Events  │
+         ▼                  ▼
+    [Kafka Events]   [public/run-history.json]
+    (consumed by      (our automation KPIs)
+     downstream)
+         │
+         │ [Downstream systems handle]
+         ▼
+    analytics-data-sync, Mongo, ES, etc.
 ```
 
 ---
