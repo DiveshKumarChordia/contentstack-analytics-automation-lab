@@ -37,6 +37,7 @@ import {
   tryLoadUserSessionHeaders,
   userSessionHeaders,
   getCurrentUser,
+  ensureUserHasCMSRole,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
@@ -99,9 +100,16 @@ async function main() {
     // For publishing, use the same headers (auth token) since we just picked a different user
     // The metering dimension is about WHO performed the action, tracked by user_uid in the event
     console.log(`  actor B: ${actorBUser.email} (auto-picked from org)`)
-    console.log(`  ⚠ note: ensure actor B has a CMS role on this stack`)
-    console.log(`      run: node --env-file=.env scripts/ensure-stack-user-role.mjs`)
-    console.log(`      with CONTENTSTACK_USER_EMAIL=${actorBUser.email}`)
+
+    // Ensure actor B has a CMS role
+    console.log(`  🔐 assigning CMS role to actor B...`)
+    const mgmtHeaders = headersForToken(apiKey, tokens[0], branch)
+    const roleAssigned = await ensureUserHasCMSRole(base, actorAHeaders, mgmtHeaders, actorBUser.email)
+    if (roleAssigned) {
+      console.log(`    ✓ CMS role assigned to ${actorBUser.email}`)
+    } else {
+      console.log(`    ⚠ could not auto-assign role; may need manual setup`)
+    }
   } else {
     console.log(`  actor B: (not available — using actor A for publish as well)`)
   }

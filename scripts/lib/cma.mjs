@@ -1001,3 +1001,90 @@ export async function shareStack(base, headers, { emails, roles }) {
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
 }
+
+// =============================================================================
+// Self-healing helpers: auto-create/assign missing prerequisites
+// =============================================================================
+
+/**
+ * Ensure a user has a CMS role on the stack.
+ * If user doesn't have any role, assign them the first non-Admin role.
+ * Requires USER authtoken (not mgmt token).
+ */
+export async function ensureUserHasCMSRole(base, userHeaders, mgmtHeaders, userEmail) {
+  try {
+    // List stack roles to find a suitable CMS role
+    const { ok: rOk, body: rBody } = await listStackRoles(base, mgmtHeaders)
+    if (!rOk || !Array.isArray(rBody.roles)) return false
+
+    const roles = rBody.roles
+    // Pick first non-Admin/Owner role, or the first one available
+    const cmsRole = roles.find((r) => !['Admin', 'Owner'].includes(r.name)) || roles[0]
+    if (!cmsRole) return false
+
+    // Share the stack with the user, assigning the CMS role
+    const { ok: sOk } = await shareStack(base, userHeaders, {
+      emails: [userEmail],
+      roles: { [userEmail]: [cmsRole.uid] },
+    })
+
+    return sOk
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Ensure a workflow exists on the stack; create if missing.
+ * Returns the workflow (found or created), or null if both fail.
+ */
+export async function ensureWorkflowExists(base, headers, workflowName, createPayload) {
+  try {
+    // Try to find the workflow by name
+    const existing = await findWorkflowByName(base, headers, workflowName)
+    if (existing) return existing
+
+    // If not found and createPayload is provided, create it
+    if (!createPayload) return null
+
+    const { ok: cOk, body: cBody } = await createWorkflow(base, headers, createPayload)
+    if (cOk && cBody?.workflow) return cBody.workflow
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Ensure a content type exists on the stack; create if missing.
+ * Returns the CT (found or created), or null if both fail.
+ */
+export async function ensureContentTypeExists(base, headers, ctUid, createPayload) {
+  try {
+    // Try to find the CT
+    const { ok: gOk, body: gBody } = await getContentType(base, headers, ctUid)
+    if (gOk && gBody?.content_type) return gBody.content_type
+
+    // If not found and createPayload is provided, create it
+    if (!createPayload) return null
+
+    const { ok: cOk, body: cBody } = await createContentType(base, headers, {
+      uid: ctUid,
+      ...createPayload,
+    })
+    if (cOk && cBody?.content_type) return cBody.content_type
+
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Get a content type by uid (minimal info). */
+export async function getContentType(base, headers, ctUid) {
+  const url = `${base}/v3/content_types/${ctUid}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}

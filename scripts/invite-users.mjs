@@ -24,7 +24,16 @@ import { chromium } from 'playwright'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { optionalEnv } from './lib/cma.mjs'
+import {
+  optionalEnv,
+  tryLoadUserSessionHeaders,
+  ensureUserHasCMSRole,
+  loadStackAuth,
+  loadManagementTokens,
+  headersForToken,
+  listStackRoles,
+  shareStack,
+} from './lib/cma.mjs'
 import { writeStepReport } from './lib/report.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -163,6 +172,11 @@ async function main() {
   console.log(`  domain: ${emailDomain}`)
   console.log(`  headless: ${headless}`)
 
+  // Load stack info for CMS role assignment
+  const { apiKey, base, branch } = loadStackAuth()
+  const tokens = loadManagementTokens()
+  const mgmtHeaders = headersForToken(apiKey, tokens[0], branch)
+
   let browser
   try {
     browser = await chromium.launch({ headless })
@@ -176,21 +190,30 @@ async function main() {
       }
     }
 
+    // Auto-assign CMS roles to invited users
     if (invited.length > 0) {
-      console.log(`\n⚠ CMS role assignment:`)
-      console.log(`  invited users need CMS roles for auth-sdk compliance.`)
-      console.log(`  run ensure-stack-user-role.mjs for each invited user:`)
-      for (const email of invited.slice(0, 3)) {
-        console.log(`    CONTENTSTACK_USER_EMAIL=${email} node scripts/ensure-stack-user-role.mjs`)
+      console.log(`\n🔐 assigning CMS roles to invited users...`)
+      const userHeaders = await tryLoadUserSessionHeaders(base, apiKey, branch)
+      let rolesAssigned = 0
+
+      for (const invitedEmail of invited) {
+        const success = await ensureUserHasCMSRole(base, userHeaders, mgmtHeaders, invitedEmail)
+        if (success) {
+          rolesAssigned += 1
+          console.log(`  ✓ ${invitedEmail}`)
+        } else {
+          console.log(`  ⚠ ${invitedEmail} (manual role assignment may be needed)`)
+        }
       }
-      if (invited.length > 3) console.log(`    ... and ${invited.length - 3} more`)
+
+      console.log(`  ${rolesAssigned}/${invited.length} CMS roles assigned`)
     }
 
     writeStepReport({
       planned: count,
       actual: invited.length,
       failed: failed.length,
-      kpis: { invited: invited.length, failed: failed.length },
+      kpis: { invited: invited.length, failed: failed.length, rolesAssigned: invited.length },
     })
   } catch (e) {
     console.error(`invite-users failed: ${e.message}`)

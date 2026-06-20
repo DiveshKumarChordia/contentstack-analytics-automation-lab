@@ -32,11 +32,13 @@ import {
   listContentTypes,
   createEntry,
   findWorkflowByName,
+  getWorkflow,
   transitionEntryWorkflow,
   tryLoadUserSessionHeaders,
   userSessionHeaders,
   getCurrentUser,
   listEntries,
+  ensureWorkflowExists,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
@@ -80,13 +82,26 @@ async function main() {
     console.warn('  warning: no user session (set CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD) — transitions skipped')
   }
 
-  // Find Editorial Review workflow
-  const wf = await findWorkflowByName(base, mgmt(branch), 'Editorial Review')
+  // Ensure Editorial Review workflow exists (create if missing)
+  console.log(`\n→ Ensuring "Editorial Review" workflow exists...`)
+  const wf = await ensureWorkflowExists(base, mgmt(branch), 'Editorial Review', {
+    name: 'Editorial Review',
+    contentTypes: ['demo_plain_text'],
+    stages: [
+      { name: 'Draft', description: 'Work in progress' },
+      { name: 'Review', description: 'Under review' },
+      { name: 'Approved', description: 'Ready to publish' },
+    ],
+    enabled: true,
+  })
+
   if (!wf) {
-    console.error('Workflow "Editorial Review" not found')
+    console.error('Failed to get or create "Editorial Review" workflow')
     writeStepReport({ planned: 0, actual: 0, failed: 1, kpis: {} })
     process.exit(1)
   }
+
+  console.log(`  ✓ workflow "${wf.name}" ready`)
 
   const { ok: wfOk, body: wfBody } = await import('./lib/cma.mjs').then(m =>
     m.getWorkflow(base, mgmt(branch), wf.uid),
