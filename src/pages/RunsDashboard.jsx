@@ -133,6 +133,16 @@ function computeAll(runs) {
       ['Workflow branch adds', fmt(sumK('workflowBranchAdds'))],
       ['Multi-branch publish rules', fmt(sumK('publishRules'))],
     ]},
+    { title: 'Meter-coverage scenarios', items: [
+      ['Edit-after-publish (in-progress)', fmt(sumK('editedPostPublish'))],
+      ['Permanent deletes (entries_deleted)', fmt(sumK('deleted'))],
+      ['Aged stalls (stalled_by_stage)', fmt(sumK('transitioned'))],
+      ['No-workflow CT (entries_without_workflow)', fmt(sumK('entriesCreated'))],
+      ['Multi-actor publishes (user_uid)', fmt(sumK('publishedByB'))],
+      ['Branch/locale deletions (orphan)', fmt(sumK('branchDeleted'))],
+      ['Users invited (org-level)', fmt(sumK('invited'))],
+      ['User invites failed', fmt(sumK('inviteFailed')), sumK('inviteFailed') ? 'bad' : 'ok'],
+    ]},
     { title: 'Efficiency & plan', items: [
       ['Total planned ops', fmt(planned)],
       ['Total actual ops', fmt(actual)],

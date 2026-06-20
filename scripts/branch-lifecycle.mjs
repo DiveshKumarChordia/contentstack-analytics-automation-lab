@@ -81,6 +81,13 @@ function intEnv(name, dflt) {
   return v != null && /^\d+$/.test(v.trim()) ? Number.parseInt(v.trim(), 10) : dflt
 }
 
+function ratioEnv(name, dflt) {
+  const v = optionalEnv(name)
+  if (!v) return dflt
+  const n = Number.parseFloat(v)
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : dflt
+}
+
 function uniqueTitle(prefix) {
   return `${prefix} ${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`
 }
@@ -118,11 +125,14 @@ async function main() {
   const tokens = loadManagementTokens()
   const mgmt = (br) => headersForToken(apiKey, tokens[0], br)
 
-  const lineageCount = intEnv('CONTENTSTACK_BRANCH_LINEAGE_COUNT', 3)
-  const entriesPerCt = intEnv('CONTENTSTACK_BRANCH_ENTRIES_PER_CT', 5)
+  // 10x defaults (no cleanup — analytics-data-sync needs the data for Mongo)
+  const lineageCount = intEnv('CONTENTSTACK_BRANCH_LINEAGE_COUNT', 30)
+  const entriesPerCt = intEnv('CONTENTSTACK_BRANCH_ENTRIES_PER_CT', 50)
+  const dynCtsPerRun = intEnv('CONTENTSTACK_BRANCH_DYN_CTS_PER_RUN', 10)
   const wfName = optionalEnv('CONTENTSTACK_BRANCH_LIFECYCLE_WORKFLOW') || 'Editorial Review'
   const CT = optionalEnv('CONTENTSTACK_BRANCH_LIFECYCLE_CONTENT_TYPE') || 'demo_plain_text'
-  const cleanup = optionalEnv('CONTENTSTACK_BRANCH_LIFECYCLE_CLEANUP') !== 'false'
+  const churnPercentage = ratioEnv('CONTENTSTACK_BRANCH_CHURN_PERCENTAGE', 0.2) // churn as % only, no delete
+  const cleanup = false // NO teardown — analytics needs the data
   const source = optionalEnv('CONTENTSTACK_BRANCH_LINEAGE_SOURCE') || baseBranch || 'main'
   const locales = deriveLocales()
   const stamp = Date.now().toString(36)

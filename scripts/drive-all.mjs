@@ -146,13 +146,37 @@ async function periodicPhase() {
   //    workflow lifecycle, and one entry delete→restore — drives every mutation
   //    the entry_workflow_snapshot meter handles (the cases nothing else covers).
   results.push(await runStep('churn orphan cases', 'churn-orphans.mjs'))
-  // 7. Branch-lifecycle: an ephemeral 3-branch lineage exercising multi-branch
-  //    entries+locales, workflow branch/CT extension, a dynamic content type,
-  //    assigned-to transitions, and a multi-branch publish rule — then torn down.
-  //    Heavy (async branch create/poll ×N) so it's opt-out via env; the workflow's
-  //    concurrency:cancel-in-progress=false skips the next cron if a run overruns.
+  // 7. Branch-lifecycle: a 30-branch lineage exercising multi-branch entries+locales,
+  //    workflow branch/CT extension, a dynamic content type, assigned-to transitions,
+  //    and a multi-branch publish rule. No teardown (analytics-data-sync needs Mongo data).
+  //    Heavy (async branch create/poll ×30) so it's opt-out via env.
   if (process.env.CONTENTSTACK_BRANCH_LIFECYCLE_ENABLED !== 'false') {
     results.push(await runStep('branch lifecycle', 'branch-lifecycle.mjs'))
+  }
+  // 8. Meter-coverage scenarios: drive unmeasured dimensions from analytics pipeline.
+  //    Each scenario is opt-in via env.
+  if (process.env.CONTENTSTACK_EDIT_AFTER_PUBLISH_ENABLED !== 'false') {
+    results.push(await runStep('edit after publish (entries_in_progress)', 'edit-after-publish.mjs'))
+  }
+  if (process.env.CONTENTSTACK_PERMANENT_DELETE_ENABLED !== 'false') {
+    results.push(await runStep('permanent deletes (entries_deleted)', 'permanent-deletes.mjs'))
+  }
+  if (process.env.CONTENTSTACK_AGED_STALL_ENABLED !== 'false') {
+    results.push(await runStep('aged stalls (stalled_by_stage)', 'aged-stalls.mjs'))
+  }
+  if (process.env.CONTENTSTACK_NO_WORKFLOW_ENABLED !== 'false') {
+    results.push(await runStep('no-workflow CT (entries_without_workflow)', 'no-workflow-ct.mjs'))
+  }
+  if (process.env.CONTENTSTACK_MULTI_ACTOR_ENABLED !== 'false') {
+    results.push(await runStep('multi-actor create/publish (user_uid)', 'multi-actor-create-publish.mjs'))
+  }
+  if (process.env.CONTENTSTACK_BRANCH_LOCALE_DELETE_ENABLED !== 'false') {
+    results.push(await runStep('branch/locale deletion (orphan cleanup)', 'branch-locale-deletion.mjs'))
+  }
+  // 9. User invitation: invite 10 new users per run (org-level metering).
+  //    Opt-out via env; requires CONTENTSTACK_USER_EMAIL + PASSWORD (UI automation).
+  if (process.env.CONTENTSTACK_USER_INVITER_ENABLED !== 'false') {
+    results.push(await runStep('invite 10 users', 'invite-users.mjs'))
   }
   return results
 }
