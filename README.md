@@ -27,12 +27,12 @@
 
 ### Purpose
 
-This project is a **full-stack testing and automation laboratory** for Contentstack that validates:
-- **Content Delivery:** Published entries served via Delivery API (frontend app)
-- **Performance:** Launch site warmup and URL hitting for cache/perf testing
-- **Analytics Metering:** CMA operations drive meter events that feed analytics dashboards
-- **Meter Coverage:** All meter dimensions tested (users, branches, locales, workflows, stages, deletions)
-- **Lifecycle Simulation:** Realistic content patterns (aging, branching, multi-user, orphaning)
+This project is a **full-stack testing and automation laboratory** for Contentstack that:
+- **Tests Content Delivery:** Published entries served via Delivery API (frontend app)
+- **Tests Performance:** Launch site warmup and URL hitting for cache/perf testing
+- **Generates Meter Events:** CMA operations that create the events and data needed for analytics metering
+- **Covers All Meter Dimensions:** Entry creation, publishing, workflow transitions, deletions across all combinations (users, branches, locales, workflows, stages)
+- **Simulates Realistic Lifecycle:** Aged entries, branching, multi-user scenarios, orphaning, soft/hard deletions
 
 ### The Problem
 
@@ -52,7 +52,7 @@ Three integrated components:
 2. **Launch Site + URL Hitting** — Warms cache, tests delivery perf, exercises Delivery API at scale
 3. **Automation Framework** — CMA lifecycle automation that drives all meter dimensions, self-heals missing prerequisites, maintains aged dataset
 
-Together, they create a **production-grade testing environment** that runs continuously (every 5 minutes in CI) to validate analytics pipelines.
+Together, they create a **production-grade testing environment** that runs continuously (every 5 minutes in CI) to generate the comprehensive meter events and data that feed downstream analytics systems.
 
 ---
 
@@ -60,25 +60,27 @@ Together, they create a **production-grade testing environment** that runs conti
 
 ```mermaid
 graph TB
-    subgraph Frontend["FRONTEND (Vite + React)"]
-        APP["Entry Listing App<br/>Delivery API integration"]
-        HERO["3D Hero<br/>Three.js/React Three Fiber"]
+    subgraph Repo["THIS REPO"]
+        subgraph Frontend["FRONTEND (Vite + React)"]
+            APP["Entry Listing App<br/>Delivery API integration"]
+            HERO["3D Hero<br/>Three.js/React Three Fiber"]
+        end
+        
+        subgraph Performance["PERFORMANCE TESTING"]
+            LAUNCH["Launch Site Warming<br/>Cache priming"]
+            HITTING["URL Hitting<br/>Entry endpoint testing"]
+            WARMUP["Delivery Warmup<br/>Perf validation"]
+        end
+        
+        subgraph Automation["AUTOMATION FRAMEWORK (CMA Operations)"]
+            BOOTSTRAP["Bootstrap Phase<br/>Create CTs, locales, workflows"]
+            PERIODIC["Periodic Phase (10k entries/run)<br/>Delete, Backfill, Create, Localize,<br/>Publish, Transition, Churn, Branch"]
+            METER["Meter-Coverage Scenarios (6x)<br/>Edit, Delete, Stall, No-WF,<br/>Multi-Actor, Orphan"]
+            USERS["User Management<br/>Invite 10 users + auto roles"]
+        end
     end
     
-    subgraph Performance["PERFORMANCE TESTING"]
-        LAUNCH["Launch Site Warming<br/>Cache priming"]
-        HITTING["URL Hitting<br/>Entry endpoint testing"]
-        WARMUP["Delivery Warmup<br/>Perf validation"]
-    end
-    
-    subgraph Automation["AUTOMATION FRAMEWORK"]
-        BOOTSTRAP["Bootstrap Phase<br/>Create CTs, locales, workflows"]
-        PERIODIC["Periodic Phase (10k entries/run)<br/>Delete, Backfill, Create, Localize,<br/>Publish, Transition, Churn, Branch"]
-        METER["Meter-Coverage Scenarios (6x)<br/>Edit, Delete, Stall, No-WF,<br/>Multi-Actor, Orphan"]
-        USERS["User Management<br/>Invite 10 users + auto roles"]
-    end
-    
-    subgraph Analytics["ANALYTICS PIPELINE"]
+    subgraph Analytics["EXTERNAL ANALYTICS PIPELINE<br/>(Not interacted with by this repo)"]
         KAFKA["Kafka Events<br/>entry_created, entry_published,<br/>entry_workflow_*, etc"]
         MONGO["Mongo Snapshot<br/>analytics-data-sync nightly"]
         ES["Elasticsearch<br/>METRIC_DATA_INDEX"]
@@ -95,16 +97,16 @@ graph TB
     Automation --> METER
     Automation --> USERS
     
-    APP -.->|Reads| KAFKA
-    PERIODIC -->|Writes| KAFKA
-    METER -->|Writes| KAFKA
-    USERS -->|Writes| KAFKA
     LAUNCH -->|Reads| APP
     HITTING -->|Hits| APP
     
-    KAFKA --> MONGO
-    MONGO --> ES
-    ES --> DASH
+    PERIODIC -.->|Triggers Events| KAFKA
+    METER -.->|Triggers Events| KAFKA
+    USERS -.->|Triggers Events| KAFKA
+    
+    KAFKA -->|consumed by| MONGO
+    MONGO -->|materialized to| ES
+    ES -->|powers| DASH
 ```
 
 ---
@@ -215,13 +217,13 @@ node --env-file=.env scripts/drive-all.mjs --mode periodic
 
 ### For Analytics/Data Engineers
 
-**Goal:** Understand how automation drives meter events and validates analytics pipelines.
+**Goal:** Understand what meter events and data this automation generates for downstream analytics systems.
 
 **Key Points:**
 - Automation creates realistic content patterns (branching, locales, workflows, aging, orphaning)
-- Every CMA operation emits Kafka events (entry_created, entry_published, entry_workflow_*, etc.)
-- Mongo snapshot (analytics-data-sync) runs nightly, materializes METRIC_DATA_INDEX
-- ES -> Analytics dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption)
+- Every CMA operation triggers events that go to Kafka (entry_created, entry_published, entry_workflow_*, etc.)
+- This repo generates comprehensive meter-relevant operations; downstream systems (analytics-data-sync, ES) consume and process them
+- We ensure all meter dimensions are covered; downstream dashboards (CMS Content Lifecycle, Workflow Health, Team Adoption) are fed by this data
 
 **Meter Coverage (What Gets Tested):**
 | Meter | Dimension | Driver | Tested |
@@ -241,8 +243,8 @@ node --env-file=.env scripts/drive-all.mjs --mode periodic
 **Verification:**
 - Check `public/run-history.json` for per-run KPIs
 - Monitor dashboard at `/runs` for trends
-- Verify Kafka events via cma-api logs
-- Validate Elasticsearch METRIC_DATA_INDEX has events
+- Verify CMA operations succeeded via run-history.json success rate
+- Confirm all meter dimensions were covered in the latest run
 
 ---
 
@@ -1207,11 +1209,11 @@ cat public/warmup-report.json
 ### Performance Checklist
 
 - ✅ Periodic runs complete in ~25 min (else tune concurrency env vars)
-- ✅ Dashboard shows 95%+ success rate
+- ✅ Dashboard shows 95%+ success rate over rolling window
 - ✅ Delivery API response times stable (check `public/warmup-report.json`)
-- ✅ Mongo snapshot updated nightly (check analytics-data-sync logs)
-- ✅ Elasticsearch METRIC_DATA_INDEX has events (check ES cluster)
-- ✅ Analytics dashboards populated (CMS Content Lifecycle, Workflow Health, Team Adoption)
+- ✅ All 6 meter-coverage scenarios passing each run
+- ✅ All meter dimensions covered (entry dimensions verified in KPIs)
+- ✅ Zero manual setup required (self-healing working on missing resources)
 
 ---
 
