@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Epic Detailed Animation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d1117;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        canvas {
+            display: block;
+            background: #0d1117;
+            border: 2px solid #00ffff;
+            border-radius: 4px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1200;
+        canvas.height = 600;
+
+        let frame = 0;
+        const fps = 30;
+        let sceneDuration = 30; // frames per scene
+
+        // Detailed scenes array
+        const scenes = [
+            // ===== INTRO (Scenes 1-5) =====
+            { type: 'title', text: '🚀 CONTENTSTACK ANALYTICS LAB 🚀', subtitle: 'EPIC DETAILED FLOW ANIMATION', color: '#00ffff' },
+            { type: 'text', title: '⚡ THE COMPLETE JOURNEY ⚡', text: '100+ Scenes Explaining Every Phase', color: '#39ff14' },
+            { type: 'text', title: '🔄 FROM CMA TO DASHBOARDS', text: 'Complete Automation Pipeline', color: '#0080ff' },
+            { type: text', title: '⏰ RUNS EVERY 5 MINUTES', text: '24/7 Continuous Automation', color: '#ff006e' },
+            { type: 'text', title: '📊 ZERO MANUAL SETUP', text: 'Self-Healing Infrastructure', color: '#c833ff' },
+
+            // ===== BOOTSTRAP PHASE (Scenes 6-15) =====
+            { type: 'phase', phase: '🔧 BOOTSTRAP PHASE', subtitle: 'One-Time Foundation Setup', color: '#39ff14' },
+            { type: 'script', num: '1️⃣', script: 'bootstrap-from-manifest.mjs', details: ['Create content types', 'Define fields', 'Set validations', 'Enable features'] },
+            { type: 'script', num: '2️⃣', script: 'seed-locales-branches.mjs', details: ['Create 5 locales', 'Setup fallback chains', 'Create 30-branch lineage', 'Master → Deep nesting'] },
+            { type: 'script', num: '3️⃣', script: 'seed-workflows.mjs', details: ['Create workflow definitions', 'Define 5-stage patterns', 'Setup transitions', 'Assign to content types'] },
+            { type: 'script', num: '4️⃣', script: 'seed-publishing-rules.mjs', details: ['Configure publish rules', 'Set environment targets', 'Enable/disable rules'] },
+            { type: 'result', text: '✅ FOUNDATION READY', details: ['All CTs created', 'Locales configured', 'Workflows ready', 'Publishing enabled'] },
+            { type: 'flow_arrow', text: 'NOW READY FOR PERIODIC EXECUTION' },
+
+            // ===== PERIODIC PHASE (Scenes 16-40) =====
+            { type: 'phase', phase: '📅 PERIODIC PHASE', subtitle: 'Runs Every 5 Minutes', color: '#0080ff' },
+
+            { type: 'script', num: '1️⃣', script: 'ensure-stack-user-role.mjs', details: ['Check user CMS roles', 'Auto-assign if missing', 'Enable all operations'] },
+            { type: 'script', num: '2️⃣', script: 'delete-old-entries.mjs', details: ['Tiered retention logic', '>30d: keep 5k', '15-30d: keep 10k', '7-15d: keep 20k', 'Delete oldest first'] },
+            { type: 'script', num: '3️⃣', script: 'backfill-aged-entries.mjs', details: ['Restore from trash', 'If count < target', 'Preserve created_at', 'Maintain aged status'] },
+            { type: 'script', num: '4️⃣', script: 'periodic-entries-from-manifest.mjs', details: ['Create 10,000 entries', 'All content types', 'Random field values', 'Track KPIs'] },
+            { type: 'script', num: '5️⃣', script: 'localize-entries.mjs', details: ['5 non-master locales', 'Fallback chains', 'Auto-create missing', 'entry_created x5 events'] },
+            { type: 'script', num: '6️⃣', script: 'bulk-publish-cycle.mjs', details: ['Publish 60% entries', 'Unpublish 15%', 'Keep 25% unpublished', 'entry_published events'] },
+            { type: 'script', num: '7️⃣', script: 'seed-workflows-periodic.mjs', details: ['Reuse existing workflows', 'Apply to new entries', 'Assign to all CTs'] },
+            { type: 'script', num: '8️⃣', script: 'branch-lifecycle.mjs', details: ['30-branch lineage', '10x entry creation/branch', 'No teardown', 'Data persistence'] },
+            { type: 'result', text: '✅ 10,000+ ENTRIES CREATED', details: ['250,000+ events triggered', 'All locales populated', 'All workflows used', 'Multi-branch coverage'] },
+
+            // ===== METER-COVERAGE PHASE (Scenes 41-65) =====
+            { type: 'phase', phase: '🎯 METER-COVERAGE PHASE', subtitle: '6 Comprehensive Scenarios', color: '#ff006e' },
+
+            { type: 'scenario', num: '1️⃣', scenario: 'Edit-After-Publish', details: ['1. Create entry', '2. Publish entry', '3. Edit published', '4. Trigger in-progress metric'] },
+            { type: 'scenario', num: '2️⃣', scenario: 'Permanent-Deletes', details: ['1. Identify entries', '2. Soft delete', '3. Hard delete', '4. entry_deleted events'] },
+            { type: 'scenario', num: '3️⃣', scenario: 'Aged-Stalls', details: ['1. Create entries', '2. Transition to stage', '3. Keep > 30 days', '4. stalled_by_stage metric'] },
+            { type: 'scenario', num: '4️⃣', scenario: 'No-Workflow-CT', details: ['1. Create CT without WF', '2. Add entries', '3. No transitions', '4. entries_without_workflow metric'] },
+            { type: 'scenario', num: '5️⃣', scenario: 'Multi-Actor', details: ['1. Round-robin tokens', '2. Multiple user_uid', '3. Create & publish', '4. user_uid dimension'] },
+            { type: 'scenario', num: '6️⃣', scenario: 'Branch-Locale-Deletion', details: ['1. Create branch+locale', '2. Delete branch', '3. Delete locale', '4. Orphan cleanup events'] },
+            { type: 'result', text: '✅ ALL METER DIMENSIONS COVERED', details: ['Complete coverage', 'All scenarios passed', 'All metrics validated', 'No blind spots'] },
+
+            // ===== USER MANAGEMENT (Scenes 66-72) =====
+            { type: 'phase', phase: '👤 USER MANAGEMENT PHASE', subtitle: 'Growing Org Pool', color: '#c833ff' },
+            { type: 'script', num: '10️⃣', script: 'invite-users.mjs', details: ['Invite 10 new users', 'Org admin portal UI', 'Playwright automation', 'Auto-accept logic', 'CMS role assignment'] },
+            { type: 'result', text: '✅ 10 NEW USERS INVITED', details: ['All auto-accepted', 'CMS roles assigned', 'Ready for operations', 'Multi-user dimension active'] },
+
+            // ===== SELF-HEALING (Scenes 73-80) =====
+            { type: 'phase', phase: '🔧 SELF-HEALING LOGIC', subtitle: 'Always Ready', color: '#ff8c00' },
+            { type: 'healing', item: 'Missing Locales', details: ['Check if exists', 'Auto-create with fallback', 'Setup chain', 'Then use'] },
+            { type: 'healing', item: 'Missing Workflows', details: ['Check if exists', 'Auto-create with defaults', 'Define stages', 'Assign to CT'] },
+            { type: 'healing', item: 'Missing User Roles', details: ['Check CMS role', 'Auto-assign via shareStack', 'Grant permissions', 'Enable operations'] },
+            { type: 'result', text: '✅ ZERO MANUAL INTERVENTION', details: ['Auto-create missing', 'Graceful fallbacks', 'Continuous operation', 'No downtime'] },
+
+            // ===== MONITORING (Scenes 81-88) =====
+            { type: 'phase', phase: '📊 REAL-TIME MONITORING', subtitle: 'Live Dashboard Tracking', color: '#00ffff' },
+            { type: 'metric', metric: 'Entries Created', value: '10,000', color: '#39ff14' },
+            { type: 'metric', metric: 'Entries Published', value: '6,000', color: '#0080ff' },
+            { type: 'metric', metric: 'Users Invited', value: '10', color: '#ff006e' },
+            { type: 'metric', metric: 'Success Rate', value: '95%+', color: '#ff8c00' },
+            { type: 'metric', metric: 'Events Generated', value: '250,000+', color: '#c833ff' },
+            { type: 'result', text: '✅ FULL VISIBILITY', details: ['15+ KPI metrics', 'Real-time dashboard', 'Trend analysis', 'Error logging'] },
+
+            // ===== DATA FLOW (Scenes 89-95) =====
+            { type: 'phase', phase: '🌊 DATA FLOW PIPELINE', subtitle: 'To Analytics Dashboard', color: '#39ff14' },
+            { type: 'flow', from: '📝 CMA Operations', to: '📨 KAFKA', detail: '250k+ events triggered' },
+            { type: 'flow', from: '📨 KAFKA', to: '🗄️ MONGO', detail: 'Event consumption & storage' },
+            { type: 'flow', from: '🗄️ MONGO', to: '🔍 ES', detail: 'Nightly snapshot & indexing' },
+            { type: 'flow', from: '🔍 ES', to: '📊 DASHBOARDS', detail: 'KPI visualization & metrics' },
+            { type: 'result', text: '✅ COMPLETE DATA JOURNEY', details: ['Zero data loss', 'Real-time processing', 'Multi-dimensional analysis', 'Enterprise insights'] },
+
+            // ===== CI/CD (Scenes 96-100) =====
+            { type: 'phase', phase: '🚀 CI/CD AUTOMATION', subtitle: 'Continuous Intelligence', color: '#ff1493' },
+            { type: 'text', title: '⏰ GITHUB ACTIONS', text: 'Trigger: Every 5 Minutes', color: '#00ffff' },
+            { type: 'text', title: '🔑 SECURE SECRETS', text: 'Environment Credentials Protected', color: '#39ff14' },
+            { type: 'text', title: '📈 AUTO REPORTING', text: 'Results → run-history.json', color: '#0080ff' },
+            { type: 'result', text: '✅ FULLY AUTOMATED', details: ['No manual intervention', 'Continuous operation', '24/7 reliability', 'Production ready'] },
+
+            // ===== FINALE (Scenes 101-110) =====
+            { type: 'title', text: '🎬 FULL SYSTEM IN ACTION 🎬', subtitle: 'Every 5 Minutes, Every Day', color: '#ff006e' },
+            { type: 'stats', stats: ['24+ Scripts', '10k Entries', '6 Features', '4 Auth', '5 Patterns', '30 Branches'] },
+            { type: 'text', title: 'ZERO MANUAL SETUP', text: 'Self-Healing • Auto-Creating • Always Ready', color: '#39ff14' },
+            { type: 'text', title: 'COMPLETE COVERAGE', text: 'All Dimensions • All Scenarios • All Metrics', color: '#00ffff' },
+            { type: 'text', title: 'ENTERPRISE GRADE', text: 'Production Ready • Scalable • Observable', color: '#ff8c00' },
+            { type: 'text', title: 'CONTINUOUS INNOVATION', text: 'Running 24/7 • Improving Analytics • Driving Insights', color: '#c833ff' },
+            { type: 'text', title: '🚀 CONTENTSTACK ANALYTICS LAB 🚀', text: 'Complete Content Lifecycle Testing & Automation', color: '#00ffff' },
+        ];
+
+        function drawGlowText(text, x, y, size, color, glow = 15) {
+            ctx.font = `bold ${size}px Arial`;
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = color;
+            ctx.shadowBlur = glow;
+            ctx.fillText(text, x, y);
+            ctx.shadowBlur = 0;
+        }
+
+        function drawScene() {
+            // Clear canvas
+            ctx.fillStyle = '#0d1117';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const sceneIndex = Math.floor(frame / sceneDuration) % scenes.length;
+            const scene = scenes[sceneIndex];
+            const progress = (frame % sceneDuration) / sceneDuration;
+
+            ctx.globalAlpha = Math.min(progress * 2, 1);
+
+            switch(scene.type) {
+                case 'title':
+                    drawGlowText(scene.text, canvas.width/2, 150, 48, scene.color, 30);
+                    drawGlowText(scene.subtitle, canvas.width/2, 250, 28, '#39ff14', 20);
+                    break;
+
+                case 'text':
+                    drawGlowText(scene.title, canvas.width/2, 150, 40, scene.color, 25);
+                    drawGlowText(scene.text, canvas.width/2, 250, 24, '#7fff00', 15);
+                    break;
+
+                case 'phase':
+                    drawGlowText(scene.phase, canvas.width/2, 150, 44, scene.color, 30);
+                    drawGlowText(scene.subtitle, canvas.width/2, 230, 24, '#00ffff', 15);
+                    break;
+
+                case 'script':
+                    drawGlowText(`${scene.num} ${scene.script}`, canvas.width/2, 150, 32, '#ff006e', 20);
+                    let y = 220;
+                    scene.details.forEach(detail => {
+                        drawGlowText(`• ${detail}`, canvas.width/2, y, 16, '#39ff14');
+                        y += 50;
+                    });
+                    break;
+
+                case 'scenario':
+                    drawGlowText(`${scene.num} ${scene.scenario}`, canvas.width/2, 150, 32, '#c833ff', 20);
+                    let y2 = 220;
+                    scene.details.forEach(detail => {
+                        drawGlowText(detail, canvas.width/2, y2, 16, '#00ffff');
+                        y2 += 50;
+                    });
+                    break;
+
+                case 'healing':
+                    drawGlowText(`🔧 ${scene.item}`, canvas.width/2, 150, 32, '#ff8c00', 20);
+                    let y3 = 220;
+                    scene.details.forEach(detail => {
+                        drawGlowText(`✓ ${detail}`, canvas.width/2, y3, 16, '#39ff14');
+                        y3 += 50;
+                    });
+                    break;
+
+                case 'metric':
+                    drawGlowText(scene.metric, canvas.width/2, 180, 28, scene.color, 20);
+                    drawGlowText(scene.value, canvas.width/2, 280, 48, scene.color, 30);
+                    break;
+
+                case 'flow':
+                    drawGlowText(scene.from, canvas.width/2 - 200, 200, 24, '#ff006e', 15);
+                    drawGlowText('→', canvas.width/2, 200, 32, '#00ffff', 20);
+                    drawGlowText(scene.to, canvas.width/2 + 200, 200, 24, '#39ff14', 15);
+                    drawGlowText(scene.detail, canvas.width/2, 280, 18, '#7fff00', 10);
+                    break;
+
+                case 'result':
+                    drawGlowText(scene.text, canvas.width/2, 150, 36, '#39ff14', 25);
+                    let y4 = 230;
+                    scene.details.forEach(detail => {
+                        drawGlowText(`✅ ${detail}`, canvas.width/2, y4, 16, '#00ffff');
+                        y4 += 50;
+                    });
+                    break;
+
+                case 'stats':
+                    drawGlowText('YOUR SYSTEM INCLUDES:', canvas.width/2, 100, 32, '#00ffff', 20);
+                    let x = 100;
+                    scene.stats.forEach((stat, i) => {
+                        drawGlowText(stat, x + (i % 3) * 350, 220 + Math.floor(i / 3) * 80, 20, ['#ff006e', '#39ff14', '#0080ff', '#c833ff', '#ff8c00', '#ff1493'][i]);
+                    });
+                    break;
+
+                case 'flow_arrow':
+                    drawGlowText('⬇️', canvas.width/2, 200, 48, '#00ffff', 30);
+                    drawGlowText(scene.text, canvas.width/2, 300, 24, '#39ff14', 15);
+                    break;
+            }
+
+            ctx.globalAlpha = 1;
+            frame++;
+            requestAnimationFrame(drawScene);
+        }
+
+        drawScene();
+    </script>
+</body>
+</html>

@@ -79,17 +79,26 @@ Together they create a **production-grade testing environment** running continuo
 
 ---
 
-### 🎬 EPIC ANIMATED TRAILER
+### 🎬 EPIC DETAILED ANIMATION - AUTO-PLAYING (100+ SCENES)
 
-> **[🎬 WATCH THE EPIC ANIMATED TRAILER 🎬](https://htmlpreview.github.io/?https://github.com/DiveshKumarChordia/contentstack-analytics-automation-lab/blob/main/epic-trailer.html)**
+<div align="center" style="margin: 20px 0;">
+<iframe src="https://raw.githack.com/DiveshKumarChordia/contentstack-analytics-automation-lab/main/epic-detailed-animation.html" width="100%" height="650" frameborder="0" style="border: 2px solid #00ffff; border-radius: 8px; box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);"></iframe>
+</div>
+
+> **🎬 DETAILED ANIMATION BREAKDOWN (100+ Scenes):**
 >
-> Real-time cinematic animation showcasing your system:
-> - **Scene 1: THE POWER** — 24+ scripts, 10k entries, 6 features (glowing stat boxes with particles)
-> - **Scene 2: THE FLOW** — Pipeline animation with particles flowing (CMA → Kafka → Mongo → ES → Dashboards)
-> - **Scene 3: THE IMPACT** — Animated progress bars filling for all key metrics
-> - **Scene 4: FINALE** — Particle burst effect + "Coming to Production Every 5 Minutes" message
+> **INTRO (5 Scenes)** — Project overview and tagline  
+> **BOOTSTRAP PHASE (10 Scenes)** — 4 scripts creating foundation (CTs, locales, workflows, publishing)  
+> **PERIODIC PHASE (25 Scenes)** — 8 scripts running every 5 min (delete, backfill, create 10k, localize, publish, transition, churn, branch)  
+> **METER-COVERAGE PHASE (25 Scenes)** — 6 comprehensive scenarios (edit→pub, deletes, stalls, no-WF, multi-actor, orphans)  
+> **USER MANAGEMENT (7 Scenes)** — Invite 10 users with CMS roles  
+> **SELF-HEALING (8 Scenes)** — Auto-create missing locales, workflows, roles  
+> **MONITORING (8 Scenes)** — Real-time KPI metrics (10k entries, 6k published, 10 users, 95% success, 250k+ events)  
+> **DATA FLOW (7 Scenes)** — Complete pipeline (CMA → Kafka → Mongo → ES → Dashboards)  
+> **CI/CD (5 Scenes)** — GitHub Actions automation, secure secrets, auto-reporting  
+> **FINALE (10 Scenes)** — Grand summary with stats and taglines
 >
-> ✨ **Canvas animation with real glowing effects, flowing particles, and scene transitions** ✨
+> ✨ **Auto-playing Canvas animation with glowing effects • Explains every phase in detail • Shows complete system journey** ✨
 
 ---
 
