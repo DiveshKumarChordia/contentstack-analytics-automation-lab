@@ -932,9 +932,23 @@ graph TB
     CMAAPI -.->|Triggers| KAFKA
     ORGADMIN -.->|Triggers| KAFKA
     
+    subgraph Analytics["⭐ LOCAL ANALYTICS (NEW)<br/>4-Phase Pipeline"]
+        AP1["Phase 1:<br/>Analytics Engine<br/>(extract KPIs)"]
+        AP2["Phase 2:<br/>KPI Schema<br/>(normalize)"]
+        AP3["Phase 3:<br/>Stack Metrics<br/>(trends, health)"]
+        AP4["Phase 4:<br/>Dashboard<br/>(visualize)"]
+        AP1 --> AP2 --> AP3 --> AP4
+    end
+    
     KAFKA -->|Events flow| MONGO
     MONGO -->|Snapshot scan| ES
     ES -->|Powers| DASH
+    
+    UserMgmt -.->|Audit trail<br/>50+ KPIs| Analytics
+    Coverage -.->|Audit trail<br/>50+ KPIs| Analytics
+    Periodic -.->|Audit trail<br/>50+ KPIs| Analytics
+    
+    Analytics -->|Visualize<br/>50+ KPIs| FE
     
     style Repo fill:#0d1117,stroke:#00ffff,color:#00ffff
     style FrontEnd fill:#1a1f26,stroke:#ff006e,color:#ff1493
@@ -945,6 +959,11 @@ graph TB
     style Libraries fill:#1a1f26,stroke:#39ff14,color:#7fff00
     style Stack fill:#1a1f26,stroke:#c833ff,color:#dd33ff
     style Events fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Analytics fill:#1a1f26,stroke:#00b300,color:#39ff14
+    style AP1 fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style AP2 fill:#1a1f26,stroke:#9933ff,color:#dd33ff
+    style AP3 fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style AP4 fill:#1a1f26,stroke:#00b300,color:#39ff14
     style Downstream fill:#1a1f26,stroke:#c833ff,color:#dd33ff
 ```
 
@@ -994,6 +1013,14 @@ graph LR
         DASH["RunsDashboard at /runs<br/>(show trends, errors)"]
     end
     
+    subgraph Analytics["⭐ 4-PHASE ANALYTICS PIPELINE (NEW)"]
+        AP1["Phase 1: Analytics Engine<br/>(extract 50+ KPIs<br/>from audit trail)"]
+        AP2["Phase 2: KPI Schema<br/>(normalize & validate<br/>30+ standard fields)"]
+        AP3["Phase 3: Stack Metrics<br/>(all-time, trends,<br/>health, MTBF)"]
+        AP4["Phase 4: Dashboard<br/>(visualize 50+ KPIs<br/>in 5 tabs)"]
+        AP1 --> AP2 --> AP3 --> AP4
+    end
+    
     CI --> ORCH
     ORCH -->|Run once| Init
     ORCH -->|Run every cycle| Maint
@@ -1002,6 +1029,8 @@ graph LR
     Meter --> Users
     Users --> HIST
     HIST --> DASH
+    DASH -->|Audit trail| Analytics
+    AP4 -->|Complete insights| DASH
     
     style CI fill:#1a1f26,stroke:#ff1493,color:#ff1493
     style Init fill:#1a1f26,stroke:#39ff14,color:#7fff00
@@ -1010,6 +1039,11 @@ graph LR
     style Meter fill:#1a1f26,stroke:#c833ff,color:#dd33ff
     style Users fill:#1a1f26,stroke:#0080ff,color:#00bfff
     style Output fill:#1a1f26,stroke:#00ffff,color:#00ffff
+    style Analytics fill:#1a1f26,stroke:#00b300,color:#39ff14
+    style AP1 fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style AP2 fill:#1a1f26,stroke:#9933ff,color:#dd33ff
+    style AP3 fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style AP4 fill:#1a1f26,stroke:#00b300,color:#39ff14
 ```
 
 #### 3. Entry Placeholder Resolution Flow (LLD)
