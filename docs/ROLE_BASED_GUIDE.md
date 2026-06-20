@@ -1,6 +1,24 @@
 # Role-Based Users with Multi-User Operations
 
-Complete guide to testing with different user roles and collaborative operations.
+**⚠️ CRITICAL: These are TEST SIMULATION ROLES, NOT actual CMS roles.**
+
+This system creates test users with simulated roles for automation testing purposes. These test simulation roles (Owner, Admin, Editor, Contributor, Viewer) are COMPLETELY SEPARATE from actual Contentstack CMS stack-level roles (Developer, Content Manager, Viewer).
+
+**Test Simulation Roles** (this system):
+- For testing different user types and permission boundaries
+- Created on-the-fly for test scenarios
+- Used to validate multi-user workflows
+- DO NOT map to actual CMS stack roles
+
+**Actual CMS Stack Roles** (real Contentstack):
+- Control actual API access on stacks
+- Determined by stack sharing in Contentstack UI
+- Independent of our test simulation system
+- Our test users get assigned these separately for API access
+
+---
+
+Complete guide to testing with different test simulation roles and collaborative operations.
 
 ---
 

@@ -1379,6 +1379,74 @@ CONTENTSTACK_RUN_LOCALE_EXPERIMENTS=1 npm run automate:locale-experiments
 
 ---
 
+### 6. Dynamic Multi-User Creation System (NEW)
+
+**⚠️ IMPORTANT: Test Automation Roles vs CMS Roles**
+
+This system creates **test simulation users** for automation testing. These are SEPARATE from actual Contentstack CMS roles:
+- **Test Simulation Roles** (Owner, Admin, Editor, Contributor, Viewer) — for testing different user types
+- **Actual CMS Stack Roles** (Developer, Content Manager, Viewer) — real API access control
+
+The test users are created on-the-fly and get assigned actual CMS stack roles separately for API access.
+
+#### Three Modes:
+
+**Mode 1: Random Users (Gmail Plus Addressing)**
+```bash
+npm run automate:random-users
+```
+- Creates 5-10 unique users from single Gmail inbox using plus addressing
+- Pattern: `divesh.k+2025-12-08T14-30-45@contentstack.com`
+- Each performs random operations
+- Zero setup, unlimited unique users
+
+**Mode 2: Assigned Operations**
+```bash
+npm run automate:assigned-users:30
+```
+- Creates 30 users with pre-assigned operations
+- Email encodes run time + operations: `divesh.k+run-2025-dec-08-0230pm-ops-create-publish@...`
+- Each user performs their assigned operations
+- Tracks assigned vs actual performance
+
+**Mode 3: Role-Based Testing (NEW - Test Simulation Roles)**
+```bash
+npm run automate:with-roles
+```
+- Creates 30 users with 5 test simulation roles:
+  - **Owner** (Level 5) — All operations (test role only, not CMS role)
+  - **Admin** (Level 4) — Most operations (test role only, not CMS role)
+  - **Editor** (Level 3) — Content operations (test role only, not CMS role)
+  - **Contributor** (Level 2) — Create/edit only (test role only, not CMS role)
+  - **Viewer** (Level 1) — Read-only (test role only, not CMS role)
+- Supports multi-user collaborative operations
+- 4 distribution strategies: pyramid, balanced, admin-heavy, viewer-heavy
+
+#### Key Features:
+
+- **Gmail Plus Addressing**: `base+suffix@domain` → all route to `base@domain`, unlimited unique users
+- **Human-Readable Dates**: `2025-dec-08-0230pm` instead of numeric timestamps
+- **Operation Encoding**: Email shows what operations user will perform
+- **Multi-User Operations**: Workflows requiring multiple roles (review-and-publish, collaborative-create, etc.)
+- **Structured Logging**: DEBUG/INFO/WARN/ERROR logs with timestamps
+- **Complete Audit Trails**: Track every operation, user, timestamp, success/failure
+
+#### Documentation:
+
+- **[RANDOM_USERS_GUIDE.md](docs/RANDOM_USERS_GUIDE.md)** — Gmail plus addressing, unlimited users
+- **[ASSIGNED_USERS_GUIDE.md](docs/ASSIGNED_USERS_GUIDE.md)** — Operation assignments with human dates
+- **[ROLE_BASED_GUIDE.md](docs/ROLE_BASED_GUIDE.md)** — Test role simulation and multi-user workflows
+
+#### Email Examples:
+
+```
+Random:    divesh.k+2025-12-08T14-30-45@contentstack.com
+Assigned:  divesh.k+run-2025-dec-08-0230pm-ops-create-publish@contentstack.com
+Role-Based: divesh.k+run-2025-dec-08-0230pm-role-admin-ops-create@contentstack.com
+```
+
+---
+
 ## All 24+ Scripts Reference
 
 ### Orchestration
