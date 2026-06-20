@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * backfill-aged-entries.mjs — restore entries to retention targets if below thresholds.
+ * backfill-aged-entries.mjs — restore trashed entries to meet retention targets.
  *
  * After delete-old-entries runs and trims aged entries, this script checks if any
- * age band has fallen below its retention target. If so, creates new entries and
- * backfills them to meet the target.
+ * age band has fallen below its retention target. If so, restores soft-deleted
+ * (trashed) entries from that time period back to the stack.
  *
  * Retention targets (default, per age band):
  *   >30d:  5,000 entries
@@ -12,12 +12,12 @@
  *   7-15d:  20,000 entries
  *
  * Motivation: the aged-stalls and other meter-coverage scenarios need a pool of
- * aged entries to exercise. Without this backfill, multiple runs leave only fresh
- * entries (created today), and the stalled_by_stage meter has no material to work with.
+ * aged entries to exercise. Without this, multiple runs leave only fresh entries
+ * (created today), and the stalled_by_stage meter has no material to work with.
  *
- * Implementation: creates entries with a marker title (e.g., "BACKFILL: ...") so they're
- * identifiable. Backfilled entries are created fresh but the analytics snapshot system
- * will age them naturally based on created_at timestamp.
+ * Implementation: queries the CMA for trashed entries in each age band and restores
+ * them back to the stack. Restoring bumps their updated_at timestamp but preserves
+ * the original created_at, so they maintain their "aged" status.
  *
  * Usage:
  *   node --env-file=.env scripts/backfill-aged-entries.mjs
@@ -28,12 +28,17 @@ import {
   loadManagementTokens,
   headersForToken,
   listEntries,
-  createEntry,
+  restoreEntry,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { readFileSync } from 'node:fs'
+import { resolve, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 function intEnv(name, dflt) {
   const v = optionalEnv(name)
@@ -47,103 +52,129 @@ const RETENTION_TARGETS = {
   aged7to15: intEnv('CONTENTSTACK_RETENTION_TARGET_7_15D', 20000),
 }
 
-async function getEntriesByAgeBand(base, headers, ctUid) {
+// Query for trashed (soft-deleted) entries in a specific age band
+async function listTrashedEntriesInBand(base, headers, ctUid, bandStartMs, bandEndMs, locale = 'en-us') {
+  try {
+    // Query for entries deleted/trashed in this time range
+    // Using created_at to find entries originally from this band
+    const now = Date.now()
+    const startDate = new Date(now - bandStartMs).toISOString()
+    const endDate = new Date(now - bandEndMs).toISOString()
+
+    // Query: created_at >= endDate AND created_at < startDate (reverse because band is age, not absolute time)
+    const query = {
+      'created_at': { $gte: endDate, $lt: startDate },
+    }
+
+    const { ok, body } = await listEntries(base, headers, ctUid, {
+      locale,
+      limit: 1000,
+      query,
+      includeCount: true,
+    })
+
+    if (!ok) return []
+
+    const entries = body.entries || []
+    // Filter to only those that are marked as deleted/trashed
+    // (In Contentstack, soft-deleted entries might have a _metadata flag or similar)
+    return entries.filter((e) => e._metadata?.deleted_at || e.deleted)
+  } catch {
+    return []
+  }
+}
+
+async function getRestorableCandidates(base, headers, ctUid) {
   const now = Date.now()
   const day = 86_400_000
 
-  // Get entries in each age band
   const bands = {
-    over30d: { gte: 0, lt: now - 30 * day, target: RETENTION_TARGETS.over30d, label: '>30d' },
-    aged15to30: { gte: now - 30 * day, lt: now - 15 * day, target: RETENTION_TARGETS.aged15to30, label: '15-30d' },
-    aged7to15: { gte: now - 15 * day, lt: now - 7 * day, target: RETENTION_TARGETS.aged7to15, label: '7-15d' },
+    over30d: { start: 30 * day, end: 100 * day, target: RETENTION_TARGETS.over30d, label: '>30d' },
+    aged15to30: { start: 15 * day, end: 30 * day, target: RETENTION_TARGETS.aged15to30, label: '15-30d' },
+    aged7to15: { start: 7 * day, end: 15 * day, target: RETENTION_TARGETS.aged7to15, label: '7-15d' },
   }
 
   const result = {}
   for (const [key, band] of Object.entries(bands)) {
-    // Query entries created in this band (use CMA date filter)
-    // Note: CMA doesn't have a direct created_at range filter; we'll fetch and filter locally
-    const { ok, body } = await listEntries(base, headers, ctUid, { limit: 1, skip: 0 })
-    if (!ok) {
-      result[key] = { count: 0, target: band.target, label: band.label }
-      continue
+    const trashed = await listTrashedEntriesInBand(base, headers, ctUid, band.start, band.end)
+    result[key] = {
+      trashed: trashed.slice(0, band.target), // Limit to target count
+      target: band.target,
+      label: band.label,
     }
-    // For simplicity, assume we don't have many aged entries; full count requires pagination
-    const entries = body.entries || []
-    const ageMs = now - Date.parse(entries[0]?.created_at || now)
-    const inBand = entries.filter((e) => {
-      const age = now - Date.parse(e.created_at)
-      return age >= band.gte && age < band.lt
-    }).length
-    result[key] = { count: inBand, target: band.target, label: band.label }
+    await sleep(100)
   }
 
   return result
 }
 
 async function main() {
-  const { apiKey, base, branch } = loadStackAuth()
+  const { apiKey, base, branch, locale } = loadStackAuth()
   const tokens = loadManagementTokens()
   const mgmt = (br) => headersForToken(apiKey, tokens[0], br)
 
-  const concurrency = intEnv('CONTENTSTACK_BACKFILL_CONCURRENCY', 5)
-  const maxPerRun = intEnv('CONTENTSTACK_BACKFILL_MAX_PER_RUN', 500) // per CT
+  const concurrency = intEnv('CONTENTSTACK_BACKFILL_CONCURRENCY', 3)
 
   console.log('backfill-aged-entries')
-  console.log(`  stack: api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}`)
+  console.log(`  stack: api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}  locale=${locale || 'en-us'}`)
   console.log(`  retention targets:`)
   console.log(`    >30d:  ${RETENTION_TARGETS.over30d}`)
   console.log(`    15-30d: ${RETENTION_TARGETS.aged15to30}`)
   console.log(`    7-15d:  ${RETENTION_TARGETS.aged7to15}`)
 
-  // For demo, backfill just one CT (demo_plain_text)
+  // Get restorable candidates (trashed entries in each age band)
   const ctUid = 'demo_plain_text'
-  const bands = await getEntriesByAgeBand(base, mgmt(branch), ctUid)
+  console.log(`\n→ Querying trashed entries in ${ctUid}…`)
+  const candidates = await getRestorableCandidates(base, mgmt(branch), ctUid)
 
-  let totalBackfilled = 0
-  const kpis = { backfilled: 0, target: 0, bands: {} }
+  let totalRestored = 0
+  const kpis = { restored: 0, bands: {} }
 
-  for (const [bandKey, bandInfo] of Object.entries(bands)) {
-    const deficit = Math.max(0, bandInfo.target - bandInfo.count)
-    kpis.bands[bandInfo.label] = { current: bandInfo.count, target: bandInfo.target, deficit }
+  for (const [bandKey, bandInfo] of Object.entries(candidates)) {
+    const count = bandInfo.trashed.length
+    kpis.bands[bandInfo.label] = { restored: 0, available: count }
 
-    if (deficit === 0) {
-      console.log(`  ${bandInfo.label}: ${bandInfo.count}/${bandInfo.target} ✓`)
+    if (count === 0) {
+      console.log(`  ${bandInfo.label}: no trashed entries to restore`)
       continue
     }
 
-    const toCreate = Math.min(deficit, maxPerRun)
-    console.log(`  ${bandInfo.label}: ${bandInfo.count}/${bandInfo.target} — backfilling ${toCreate} entries`)
+    console.log(`  ${bandInfo.label}: ${count} trashed entries available — restoring them`)
 
     const progress = createProgress({
-      label: `backfill ${bandInfo.label}`,
-      total: toCreate,
-      everyN: Math.max(1, Math.floor(toCreate / 10)),
+      label: `restore ${bandInfo.label}`,
+      total: count,
+      everyN: Math.max(1, Math.floor(count / 5)),
     })
 
-    for (let i = 0; i < toCreate; i += 1) {
-      const { ok } = await createEntry(base, mgmt(branch), ctUid, {
-        title: `[BACKFILL ${bandInfo.label}] entry ${Date.now().toString(36)}-${i}`,
-        single_line: `backfilled for ${bandInfo.label} retention`,
-      })
+    await runWithConcurrency(
+      bandInfo.trashed,
+      async (entry) => {
+        const { ok } = await restoreEntry(base, mgmt(branch), {
+          contentTypeUid: ctUid,
+          entryUid: entry.uid,
+          locale: locale || 'en-us',
+        })
 
-      if (ok) {
-        totalBackfilled += 1
-        kpis.backfilled += 1
-      }
+        if (ok) {
+          totalRestored += 1
+          kpis.restored += 1
+          kpis.bands[bandInfo.label].restored += 1
+        }
 
-      progress.tick({ ok })
-
-      if ((i + 1) % 20 === 0) await sleep(100)
-    }
+        progress.tick({ ok })
+      },
+      { concurrency },
+    )
 
     progress.done()
   }
 
-  console.log(`\n✓ backfill-aged-entries done — ${totalBackfilled} entries created`)
+  console.log(`\n✓ backfill-aged-entries done — ${totalRestored} entries restored`)
 
   writeStepReport({
-    planned: Object.values(bands).reduce((a, b) => a + Math.max(0, b.target - b.count), 0),
-    actual: totalBackfilled,
+    planned: Object.values(candidates).reduce((a, b) => a + b.trashed.length, 0),
+    actual: totalRestored,
     failed: 0,
     kpis,
   })

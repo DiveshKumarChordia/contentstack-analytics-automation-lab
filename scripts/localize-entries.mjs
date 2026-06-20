@@ -35,6 +35,8 @@ import {
   listEntries,
   localizeEntry,
   getEntryLocales,
+  listLocales,
+  createLocale,
   optionalEnv,
   sleep,
 } from './lib/cma.mjs'
@@ -91,17 +93,42 @@ function localizedTitle(originalTitle, localeCode, entryUid) {
   return `[${tag}] ${originalTitle || 'Untitled'}${suffix}`
 }
 
-// Fetch available locales on this stack (to skip locales that don't exist)
-async function getAvailableLocales(base, headers) {
-  try {
-    const url = `${base}/locales`
-    const resp = await fetch(url, { headers, method: 'GET' })
-    if (!resp.ok) return []
-    const body = await resp.json()
-    return (body.locales || []).map((l) => l.code).filter(Boolean)
-  } catch {
-    return []
+// Ensure all target locales exist; create missing ones with fallback from manifest
+async function ensureLocalesExist(base, headers, targets, manifest) {
+  const { ok, body } = await listLocales(base, headers)
+  if (!ok) {
+    console.warn('  ⚠ could not list locales — skipping creation')
+    return targets
   }
+
+  const existing = new Set((body.locales || []).map((l) => l.code))
+  const localeManifest = manifest.locales || []
+  const localeMap = Object.fromEntries(localeManifest.map((l) => [l.code, l]))
+
+  for (const code of targets) {
+    if (existing.has(code)) continue
+
+    const localeInfo = localeMap[code] || {}
+    console.log(`  📍 creating locale ${code}${localeInfo.fallback ? ` (fallback: ${localeInfo.fallback})` : ''}`)
+
+    const { ok: cOk, status, body: cBody } = await createLocale(base, headers, {
+      code,
+      name: localeInfo.name || code,
+      fallbackLocale: localeInfo.fallback || undefined,
+    })
+
+    if (cOk) {
+      console.log(`    ✓ created ${code}`)
+      existing.add(code)
+    } else {
+      console.warn(`    ✗ failed (${status}): ${cBody?.error_message || ''}`)
+    }
+
+    await sleep(100)
+  }
+
+  // Return only locales that now exist
+  return targets.filter((c) => existing.has(c))
 }
 
 async function localizeForContentType(base, headers, ctUid, targets, opts) {
@@ -215,6 +242,15 @@ async function main() {
     process.exit(1)
   }
 
+  // Load locale manifest for fallback chains
+  let localeManifest = {}
+  try {
+    const path = resolve(__dirname, 'locales-branches.manifest.json')
+    localeManifest = JSON.parse(readFileSync(path, 'utf-8'))
+  } catch {
+    console.warn('  ⚠ could not load locales-branches.manifest.json')
+  }
+
   console.log(`localize-entries`)
   console.log(`  stack:    api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}`)
   console.log(`  targets:  ${targets.join(', ')}`)
@@ -222,13 +258,12 @@ async function main() {
   console.log(`  maxPerCt: ${maxPerCt}   concurrency: ${concurrency}`)
   if (DRY_RUN) console.log('** DRY RUN — no API writes **')
 
-  // Check which locales actually exist on the stack
-  const availableLocales = await getAvailableLocales(base, headers)
-  const validTargets = targets.filter((t) => availableLocales.includes(t))
-  const skipped = targets.filter((t) => !availableLocales.includes(t))
-  if (skipped.length > 0) {
-    console.log(`  ⚠ skipping ${skipped.length} locale(s) not on stack: ${skipped.join(', ')}`)
-  }
+  // Ensure all target locales exist on the stack (create if missing)
+  console.log(`\n→ Ensuring locales exist…`)
+  const validTargets = DRY_RUN
+    ? targets
+    : await ensureLocalesExist(base, headers, targets, localeManifest)
+
   if (validTargets.length === 0) {
     console.log(`  ⚠ no valid target locales — skipping localization`)
     writeStepReport({ planned: contentTypes.length * targets.length, actual: 0, failed: 0, kpis: { localized: 0, already: 0, localizeFailed: 0 } })
