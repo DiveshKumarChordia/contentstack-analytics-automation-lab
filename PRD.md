@@ -33,9 +33,9 @@ Build self-healing automation that:
 |----|-------------|----------|-------------------|
 | **FE-1** | Bootstrap: Create content foundations | P0 | Content types, locales (with fallback chains), branches, workflows exist on stack |
 | **FE-2** | Periodic: Create 10,000 entries per run | P0 | Entries created in all CTs, reported in KPIs, triggers entry_created events |
-| **FE-3** | Periodic: Localize entries to 5 non-master locales | P1 | 5 locales exist with proper fallback chains, entries localized, triggers entry_created x5 per entry |
+| **FE-3** | Periodic: Localize entries to 5 non-master locales | P1 | 5 locales exist with proper fallback chains, entries localized, auto-create missing, triggers entry_created x5 per entry |
 | **FE-4** | Periodic: Publish/unpublish entries | P1 | 60% published, 15% unpublished, triggers entry_published/unpublished events |
-| **FE-5** | Periodic: Transition entries through 5 workflow patterns | P1 | Linear, Skip, Rework, PartialStall, FirstOnly patterns applied, transitions tracked, events fired |
+| **FE-5** | Periodic: Transition entries through 5 workflow patterns | P1 | Linear, Skip, Rework, PartialStall, FirstOnly patterns applied with weighted distribution, transitions tracked, events fired |
 | **FE-6** | Periodic: Multi-branch lifecycle (30-branch lineage) | P1 | 30 lineage branches created, entries + locales on each, no teardown (data persists) |
 | **FE-7** | Periodic: Meter-coverage scenarios (6 types) | P2 | Edit-after-publish, Permanent-deletes, Aged-stalls, No-workflow-ct, Multi-actor, Branch-locale-deletion all run and report |
 | **FE-8** | Periodic: Invite 10 users + assign CMS roles | P2 | 10 new users invited via org-admin UI, CMS roles auto-assigned, no manual setup required |
@@ -46,6 +46,20 @@ Build self-healing automation that:
 | **FE-13** | Self-heal: Auto-assign CMS roles to users | P0 | Users without CMS roles auto-assigned via shareStack, then can perform operations |
 | **FE-14** | Dashboard: Visualize run metrics | P1 | Runs dashboard at /runs shows KPIs, per-step counts, error logs, trend charts |
 | **FE-15** | CI/CD: Run every 5 minutes via GitHub Actions | P0 | Scheduled cron job, environment secrets for auth, KPIs appended to run-history |
+| **FE-16** | Multi-user simulation: Round-robin across tokens | P1 | Support CONTENTSTACK_MANAGEMENT_TOKENS for parallel user actions, distinct user_uid per request |
+| **FE-17** | Authentication: 4 auth paths (authtoken, email+pwd, 2FA, TFA) | P0 | Support cached authtoken, email+password, TOTP/2FA, and one-off TFA tokens |
+| **FE-18** | Entry placeholders: Dynamic field value templating | P1 | Support __TIMESTAMP__, __UUID__, __RANDOM_*, __TAX_TERMS__ in manifest entries |
+| **FE-19** | Locale experiments: Destructive testing framework | P2 | Create/populate/delete locales, drive orphan events, gated behind CONTENTSTACK_RUN_LOCALE_EXPERIMENTS=1 |
+| **FE-20** | Frontend: Per-entry routes with Delivery API | P1 | Routes at /entry/:contentTypeUid/:entryUid, render published entries, support branches |
+| **FE-21** | Frontend: Digest/changelog UI | P2 | Unified feed with filters, grouping, pagination, event tracking |
+| **FE-22** | Frontend: 3D hero visualization | P2 | Three.js scene via React Three Fiber, responsive rendering |
+| **FE-23** | Frontend: Header Refresh action | P2 | Reload Delivery API entries without page refresh |
+| **FE-24** | Library: TOTP code generation | P1 | Generate 6-digit codes compatible with Google Authenticator, no external deps |
+| **FE-25** | Library: Entry placeholder expansion | P1 | Resolve __TIMESTAMP__, __UUID__, __RANDOM_*, __TAX_TERMS__, __ENTRY_UID__ |
+| **FE-26** | Library: Schema generation from fields | P2 | Auto-generate CT schema from field definitions |
+| **FE-27** | All 24+ scripts documented | P1 | Bootstrap (4), Periodic (8), Scenarios (6), Utils (4), plus orchestrator |
+| **FE-28** | All npm commands working | P1 | 40+ commands: individual phases, orchestration, utilities, CI mode |
+| **FE-29** | Configuration tuning: 60+ options | P1 | Support all env vars for retention, concurrency, ratios, manifest paths, taxonomy, experiments |
 
 ### Non-Functional Requirements
 

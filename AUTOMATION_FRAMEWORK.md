@@ -91,29 +91,131 @@ graph LR
 
 ---
 
-## Key Scripts
+## All 24+ Scripts
+
+### Orchestration
+
+| Script | Purpose | Mode | Output |
+|--------|---------|------|--------|
+| `drive-all.mjs` | Master orchestrator | bootstrap/periodic/full | KPI report + run-history.json |
+
+### Bootstrap Phase (Foundation Setup)
 
 | Script | Purpose | Triggers | Output |
 |--------|---------|----------|--------|
-| `drive-all.mjs` | Orchestrator (--mode bootstrap/periodic/full) | CI/manual | KPI report |
-| `bootstrap-from-manifest.mjs` | Create CTs from manifest | Bootstrap phase | CT counts |
-| `seed-locales-branches.mjs` | Create locales + branches | Bootstrap phase | Locale/branch UIDs |
-| `seed-workflows.mjs` | Create workflows + assign stages | Bootstrap phase | Workflow UIDs |
-| `delete-old-entries.mjs` | Tiered retention (3 age bands) | Periodic phase | Delete counts per band |
-| `backfill-aged-entries.mjs` | Restore from trash if below targets | Periodic phase | Restore counts |
-| `periodic-entries-from-manifest.mjs` | Bulk create entries (10k/run) | Periodic phase | Create counts |
-| `localize-entries.mjs` | Multi-locale localization | Periodic phase | Localize counts |
-| `bulk-publish-cycle.mjs` | Publish/unpublish ratio | Periodic phase | Publish/unpublish counts |
-| `seed-workflows.mjs` | Transition entries (5 patterns) | Periodic phase | Transition counts |
-| `churn-orphans.mjs` | Edge cases (disable, detach, restore) | Periodic phase | Churn counts |
-| `branch-lifecycle.mjs` | 30-branch lineage + dynamic CTs | Periodic phase | Branch + entry counts |
-| `edit-after-publish.mjs` | Create in-progress entries | Periodic phase | Edit counts |
-| `permanent-deletes.mjs` | Hard delete entries | Periodic phase | Delete counts |
-| `aged-stalls.mjs` | Create stalled entries | Periodic phase | Transition counts |
-| `no-workflow-ct.mjs` | Create entries on bare CT | Periodic phase | Entry counts |
-| `multi-actor-create-publish.mjs` | Two-user create/publish split | Periodic phase | Create/publish counts |
-| `branch-locale-deletion.mjs` | Stage + delete for orphan testing | Periodic phase | Branch delete counts |
-| `invite-users.mjs` | Invite 10 users + assign roles | Periodic phase | User counts + role assignments |
+| `bootstrap-from-manifest.mjs` | Create content types from manifest | One-time | CT UIDs, field counts |
+| `seed-locales-branches.mjs` | Create locales (w/ fallback) + branches | One-time | Locale codes, branch UIDs |
+| `seed-workflows.mjs` | Create workflows + stages | One-time | Workflow UIDs, stage counts |
+| `seed-publishing-rules.mjs` | Create publish rules for workflows | One-time | Rule counts, stage mappings |
+
+### Periodic Phase (Lifecycle Operations)
+
+| Script | Purpose | Volume | Events |
+|--------|---------|--------|--------|
+| `delete-old-entries.mjs` | Tiered retention (3 age bands, keep targets) | 3-10k | entry_deleted |
+| `backfill-aged-entries.mjs` | Restore from trash if below targets | 0-2k | entry_restored |
+| `periodic-entries-from-manifest.mjs` | Bulk create entries (concurrent) | 10,000 | entry_created x10k |
+| `localize-entries.mjs` | Multi-locale localization (auto-create missing) | 50,000 | entry_created x50k |
+| `bulk-publish-cycle.mjs` | Publish/unpublish cycle | 6,000 | entry_published/unpublished |
+| `seed-workflows.mjs` | Transition entries (5 patterns) | 2,000 | entry_workflow_* |
+| `churn-orphans.mjs` | Edge cases (disable, detach, restore) | variable | various |
+| `branch-lifecycle.mjs` | 30-branch lineage + dynamic CTs | variable | branch_* |
+
+### Meter-Coverage Scenarios (6x)
+
+| Script | Meter | Purpose | Volume |
+|--------|-------|---------|--------|
+| `edit-after-publish.mjs` | entries_in_progress | Publish → edit (no republish) | 100 |
+| `permanent-deletes.mjs` | entries_deleted | Hard delete (not soft) | 100 |
+| `aged-stalls.mjs` | stalled_by_stage | Entries stuck in mid-stages | 20 |
+| `no-workflow-ct.mjs` | entries_without_workflow | Create on bare CT | 50 |
+| `multi-actor-create-publish.mjs` | entries_published.user_uid | Creator ≠ Publisher | 10 |
+| `branch-locale-deletion.mjs` | snapshot orphan axes | Branch/locale delete | 10 |
+
+### User Management
+
+| Script | Purpose | Method | Output |
+|--------|---------|--------|--------|
+| `invite-users.mjs` | Invite 10 users + assign CMS roles | Playwright UI automation | User UIDs, role assignments |
+
+### Standalone / One-Off
+
+| Script | Purpose | Trigger | Output |
+|--------|---------|---------|--------|
+| `create-and-publish-entry.mjs` | Create and publish single entry | Manual: `npm run automate:entry` | Entry UID |
+| `ensure-stack-user-role.mjs` | Ensure user has CMS role | Manual: `npm run automate:ensure-role` | Role assignment status |
+| `locale-experiments.mjs` | Destructive locale testing | Manual: `npm run automate:locale-experiments` (gated) | Orphan event counts |
+| `warm-launch-urls.mjs` | Warm Delivery API cache | Manual: `npm run warm:launch-urls` | Response time stats |
+
+---
+
+## Advanced Features
+
+### Multi-User Simulation
+
+**Round-robin actions across multiple management tokens:**
+
+```bash
+CONTENTSTACK_MANAGEMENT_TOKENS=token1,token2,token3
+```
+
+Each request carries the token owner's user_uid in metering events. Drives `entries_published.user_uid` distinct dimension and tests multi-author scenarios.
+
+### Authentication: 4 Paths
+
+1. **Cached Authtoken** (fastest) — Skip login, use long-lived token from prior session
+2. **Email + Password + TOTP** (2FA) — Compute 6-digit code, auto-authenticate
+3. **Email + Password** (no 2FA) — Direct auth (fails if 2FA enabled)
+4. **TFA Token** (one-off) — Use current 6-digit code (~30s valid)
+
+Required for workflow transitions (management tokens cannot transition entries).
+
+### Entry Placeholders
+
+**Dynamic field value generation using templates:**
+
+- `__TIMESTAMP__` → Unix timestamp
+- `__UUID__` → Random UUID v4
+- `__RANDOM_INT(min,max)__` → Random integer
+- `__RANDOM_CHOICE(a,b,c)__` → Pick from list
+- `__ENTRY_UID__` → Current entry UID
+- `__TAX_TERMS_*__` → Taxonomy term mapping
+
+Usage in manifest:
+```json
+{
+  "title": "Entry __TIMESTAMP__",
+  "id": "__UUID__",
+  "score": "__RANDOM_INT(1,100)__"
+}
+```
+
+### Locale Experiments (Destructive)
+
+**Test locale fallback chains and orphaning scenarios:**
+
+```bash
+CONTENTSTACK_RUN_LOCALE_EXPERIMENTS=1 npm run automate:locale-experiments
+```
+
+- Never runs in normal cron (must be explicitly enabled)
+- Creates locales, populates entries, deletes, verifies orphaning
+- Drives `entries_orphaned_by_locale_deleted` events
+- Defined in `scripts/locale-experiments.manifest.json`
+
+### Workflow Patterns (5 Types)
+
+Transition patterns for testing different workflow scenarios:
+
+| Pattern | Stages | Represents |
+|---------|--------|------------|
+| Linear | [0→1→2] | Standard flow: Draft → Review → Approved |
+| Skip | [0→2] | Fast-track: Draft → Approved |
+| Rework | [0→1→0→1→2] | Revisions: Back and forth |
+| PartialStall | [0→1] | Stuck: Draft → Review (no progress) |
+| FirstOnly | [0] | No transition: Stays in first stage |
+
+Weighted distribution (default): Linear 30%, Skip 10%, Rework 20%, Stall 20%, FirstOnly 20%.
 
 ---
 

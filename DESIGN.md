@@ -57,6 +57,130 @@ graph TB
 
 ---
 
+## Library & Component Architecture
+
+```mermaid
+graph TB
+    subgraph Utils["Utility Libraries"]
+        TOTP["lib/totp.mjs<br/>TOTP Code Generation"]
+        PLACEHOLDER["lib/entry-placeholders.mjs<br/>Template Expansion"]
+        SCHEMA["lib/schema-from-fields.mjs<br/>Schema Generation"]
+        PATTERNS["lib/workflow-patterns.mjs<br/>5 Transition Types"]
+        PROGRESS["lib/progress.mjs<br/>Concurrent Tracking"]
+        REPORT["lib/report.mjs<br/>KPI Aggregation"]
+    end
+    
+    subgraph Frontend["Frontend Libraries"]
+        DELIVERY["lib/contentstackDelivery.js<br/>API Client"]
+        EXCERPT["lib/entryExcerpt.js<br/>Excerpt Generation"]
+        FORMAT["lib/entryFormat.js<br/>Field Formatting"]
+        EVENTS["lib/siteEvents.js<br/>Event Tracking"]
+    end
+    
+    subgraph Components["UI Components"]
+        ENTRY["EntryPage<br/>Single Entry Display"]
+        HOME["HomePage<br/>Entry Listing"]
+        DIGEST["DigestItem<br/>Changelog Entry"]
+        CANVAS["HeroCanvas<br/>Three.js 3D"]
+        DASHBOARD["RunsDashboard<br/>KPI Dashboard"]
+        LAYOUT["Layout<br/>App Shell"]
+    end
+    
+    DELIVERY --> ENTRY
+    DELIVERY --> HOME
+    EXCERPT --> DIGEST
+    FORMAT --> ENTRY
+    FORMAT --> HOME
+    EVENTS --> LAYOUT
+    PLACEHOLDER --> Components
+    SCHEMA --> Components
+    PATTERNS --> Utils
+    TOTP --> Utils
+    PROGRESS --> REPORT
+```
+
+---
+
+## Multi-User Simulation Flow
+
+```mermaid
+sequenceDiagram
+    participant CI as CI/Manual
+    participant Auto as Automation
+    participant Tokens as Token Pool<br/>token1,token2,token3
+    participant Stack as Contentstack
+    
+    CI->>Auto: Start with CONTENTSTACK_MANAGEMENT_TOKENS=...
+    
+    Auto->>Tokens: Token 1
+    Tokens-->>Auto: Create entry (user_uid: A)
+    Auto->>Stack: POST entry
+    Stack-->>Auto: Entry created
+    
+    Auto->>Tokens: Token 2
+    Tokens-->>Auto: Publish entry (user_uid: B)
+    Auto->>Stack: POST publish
+    Stack-->>Auto: Published (publisher: B)
+    
+    Auto->>Tokens: Token 3
+    Tokens-->>Auto: Transition (user_uid: C)
+    Auto->>Stack: POST transition
+    Stack-->>Auto: Transitioned
+    
+    Note over Stack: Meter events carry distinct user_uids
+    Note over Stack: entries_published.user_uid = {A, B, C}
+```
+
+---
+
+## TOTP/2FA Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant Script as Automation Script
+    participant TOTP as lib/totp.mjs
+    participant Auth as Contentstack Auth
+    
+    Script->>TOTP: generateTOTPToken(TOTP_SECRET)
+    TOTP->>TOTP: Current time (30s window)
+    TOTP->>TOTP: HMAC-SHA1(secret, time)
+    TOTP-->>Script: 6-digit code
+    
+    Script->>Auth: POST /auth (email, password, 2FA_code)
+    Auth-->>Script: authtoken (valid for weeks)
+    
+    Note over Script: Code valid for ~30s
+    Note over Auth: authtoken valid for weeks
+```
+
+---
+
+## Locale Experiments Flow
+
+```mermaid
+sequenceDiagram
+    participant Script as locale-experiments.mjs
+    participant Manifest as Manifest Config
+    participant Stack as Contentstack
+    
+    Manifest-->>Script: Scenario config (create, populate, delete)
+    
+    Script->>Stack: 1. Create locale
+    Stack-->>Script: Locale created
+    
+    Script->>Stack: 2. Populate with entries
+    Stack-->>Script: Entries created
+    Note over Stack: Drives entry_created events
+    
+    Script->>Stack: 3. Delete locale
+    Stack-->>Script: Locale deleted
+    Note over Stack: Drives entries_orphaned_by_locale_deleted
+    
+    Script->>Script: Optional: Recreate locale
+```
+
+---
+
 ## Sequence Diagrams
 
 ### Bootstrap Flow
