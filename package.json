@@ -47,6 +47,9 @@
     "automate:smart-random:balanced": "RANDOMIZATION_STRATEGY=balanced CONTENTSTACK_USER_COUNT=10 CONTENTSTACK_OPERATION_COUNT=50 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
     "automate:smart-random:roundrobin": "RANDOMIZATION_STRATEGY=roundrobin CONTENTSTACK_USER_COUNT=5 CONTENTSTACK_OPERATION_COUNT=30 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
     "automate:smart-random:clustered": "RANDOMIZATION_STRATEGY=clustered CONTENTSTACK_USER_COUNT=8 CONTENTSTACK_OPERATION_COUNT=40 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
+    "analytics:generate": "node scripts/generate-analytics-report.mjs",
+    "analytics:from-roles": "node scripts/generate-analytics-report.mjs step-reports/automate-with-roles.json",
+    "analytics:from-smart-random": "node scripts/generate-analytics-report.mjs step-reports/automate-smart-randomization.json",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {
