@@ -38,6 +38,10 @@
     "automate:assigned-users": "node --env-file=.env scripts/automate-with-assigned-users.mjs",
     "automate:assigned-users:30": "CONTENTSTACK_USER_COUNT=30 CONTENTSTACK_OPERATION_COUNT=100 node --env-file=.env scripts/automate-with-assigned-users.mjs",
     "automate:assigned-users:50": "CONTENTSTACK_USER_COUNT=50 CONTENTSTACK_OPERATION_COUNT=200 node --env-file=.env scripts/automate-with-assigned-users.mjs",
+    "automate:with-roles": "DISTRIBUTION=pyramid node --env-file=.env scripts/automate-with-roles.mjs",
+    "automate:with-roles:balanced": "DISTRIBUTION=balanced CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
+    "automate:with-roles:admin-heavy": "DISTRIBUTION=admin_heavy CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
+    "automate:with-roles:viewer-heavy": "DISTRIBUTION=viewer_heavy CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {
