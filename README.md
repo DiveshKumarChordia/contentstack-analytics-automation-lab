@@ -81,15 +81,15 @@ Together they create a **production-grade testing environment** running continuo
 
 ### 🎬 EPIC ANIMATED TRAILER
 
-> **[👁️ OPEN EPIC ANIMATED TRAILER 👁️](./epic-trailer.html)**
+> **[🎬 WATCH THE EPIC ANIMATED TRAILER 🎬](https://htmlpreview.github.io/?https://github.com/DiveshKumarChordia/contentstack-analytics-automation-lab/blob/main/epic-trailer.html)**
 >
-> Real-time cinematic animation showcasing your system with:
-> - **Scene 1: THE POWER** — 24+ scripts, 10k entries, 6 features (with glowing stat boxes)
-> - **Scene 2: THE FLOW** — Complete pipeline animation (CMA → Kafka → Mongo → ES → Dashboards)
-> - **Scene 3: THE IMPACT** — Growing progress bars showing your capabilities
-> - **Scene 4: FINALE** — Burst effect and "Coming to Production Every 5 Minutes" message
+> Real-time cinematic animation showcasing your system:
+> - **Scene 1: THE POWER** — 24+ scripts, 10k entries, 6 features (glowing stat boxes with particles)
+> - **Scene 2: THE FLOW** — Pipeline animation with particles flowing (CMA → Kafka → Mongo → ES → Dashboards)
+> - **Scene 3: THE IMPACT** — Animated progress bars filling for all key metrics
+> - **Scene 4: FINALE** — Particle burst effect + "Coming to Production Every 5 Minutes" message
 >
-> ✨ Real animated Canvas with glowing effects, flowing particles, and scene transitions ✨
+> ✨ **Canvas animation with real glowing effects, flowing particles, and scene transitions** ✨
 
 ---
 
