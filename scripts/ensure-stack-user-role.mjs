@@ -43,6 +43,10 @@ import {
   listStackRoles,
   shareStack,
   optionalEnv,
+  getCurrentUser,
+  listOrganizationRoles,
+  inviteUserToOrganization,
+  sleep,
 } from './lib/cma.mjs'
 
 const DRY_RUN = process.argv.slice(2).includes('--dry-run')
@@ -76,7 +80,7 @@ async function main() {
   const { apiKey, base, branch } = loadStackAuth()
   const email = optionalEnv('CONTENTSTACK_USER_EMAIL')
 
-  console.log('ensure-stack-user-role')
+  console.log('ensure-stack-user-role + org membership')
   console.log(`  stack: api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}`)
   console.log(`  user:  ${email || '(CONTENTSTACK_USER_EMAIL unset)'}`)
   if (DRY_RUN) console.log('** DRY RUN — no API writes **')
@@ -131,20 +135,75 @@ async function main() {
   })
   if (ok) {
     console.log(`  ✓ shared — ${email} now has stack role "${role.name}"`)
-    return
+  } else {
+    // Benign cases: already a member / already invited / is the owner. Treat as
+    // satisfied (owner can't be assigned a role, but that's fine — surface a note).
+    const msg = (body?.error_message || JSON.stringify(body)).toLowerCase()
+    const benign =
+      status === 409 ||
+      /already|owner|member|invited|exists/.test(msg)
+    if (benign) {
+      console.log(`  • stack role already satisfied (${status}: ${body?.error_message || 'member/owner'})`)
+    } else {
+      console.warn(`  ✗ stack share failed (${status}): ${body?.error_message || JSON.stringify(body).slice(0, 200)}`)
+      process.exitCode = 1
+      return
+    }
   }
-  // Benign cases: already a member / already invited / is the owner. Treat as
-  // satisfied (owner can't be assigned a role, but that's fine — surface a note).
-  const msg = (body?.error_message || JSON.stringify(body)).toLowerCase()
-  const benign =
-    status === 409 ||
-    /already|owner|member|invited|exists/.test(msg)
-  if (benign) {
-    console.log(`  • already satisfied (${status}: ${body?.error_message || 'member/owner'})`)
-    return
+
+  // 4) Also ensure org-level membership with member role
+  console.log(`\n  Ensuring org-level membership...`)
+  try {
+    const { ok: uOk, body: uBody } = await getCurrentUser(base, userHeaders)
+    if (!uOk) {
+      console.warn(`  ⚠ could not get current user info — skipping org role assignment`)
+      return
+    }
+    const user = uBody?.user
+    const orgUid = user?.org_uid?.[0] || user?.shared_org_uid?.[0]
+    if (!orgUid) {
+      console.log(`  ⚠ user has no organization — skipping org role assignment`)
+      return
+    }
+
+    // Get org member role
+    const { ok: rOk, body: rBody } = await listOrganizationRoles(base, userHeaders, orgUid)
+    if (!rOk || !Array.isArray(rBody?.roles)) {
+      console.warn(`  ⚠ could not list org roles — skipping`)
+      return
+    }
+    const memberRole = rBody.roles.find((r) => r.domain === 'organization' && r.name === 'member')
+    if (!memberRole) {
+      console.log(`  ⚠ org has no member role — skipping org invite`)
+      return
+    }
+
+    if (DRY_RUN) {
+      console.log(`  [dry-run] would invite ${email} to org ${orgUid} as member`)
+      return
+    }
+
+    // Invite user to org with member role
+    const { ok: iOk, status: iStatus, body: iBody } = await inviteUserToOrganization(base, userHeaders, orgUid, {
+      emails: [email],
+      roles: { [email]: [memberRole.uid] },
+    })
+
+    if (iOk) {
+      console.log(`  ✓ org invite sent — ${email} is now a member of organization`)
+    } else {
+      const msg = (iBody?.message || JSON.stringify(iBody)).toLowerCase()
+      const benign = iStatus === 409 || /already|member|invited|exists/.test(msg)
+      if (benign) {
+        console.log(`  • org membership already satisfied`)
+      } else {
+        console.warn(`  ✗ org invite failed (${iStatus}): ${iBody?.message || JSON.stringify(iBody).slice(0, 200)}`)
+        process.exitCode = 1
+      }
+    }
+  } catch (e) {
+    console.warn(`  ⚠ org role assignment error: ${e.message}`)
   }
-  console.warn(`  ✗ share failed (${status}): ${body?.error_message || JSON.stringify(body).slice(0, 200)}`)
-  process.exitCode = 1
 }
 
 main().catch((err) => {
