@@ -419,6 +419,19 @@ export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
   const totpSecret = optionalEnv('CONTENTSTACK_USER_TOTP_SECRET')
   const manualTfa = optionalEnv('CONTENTSTACK_USER_TFA_TOKEN')
 
+  // When multiple CI instances authenticate simultaneously with the same credentials,
+  // they can collide on TOTP codes (30-second window). Avoid this by adding a random
+  // wait before login. Range: 0 to 80 TOTP steps (30sec each) = 0 to 2400ms.
+  // Factor 50 (middle value) gives 50/80 = 62.5% of max wait time.
+  if (totpSecret) {
+    const randomFactor = Math.floor(Math.random() * 81) // 0 to 80 inclusive
+    const waitMs = randomFactor * 30 // Each step is 30 seconds in ms units (as factor)
+    if (waitMs > 0) {
+      console.log(`  ⏳ Random TOTP backoff: waiting ${waitMs}ms to avoid collision with parallel instances`)
+      await sleep(waitMs)
+    }
+  }
+
   // Retry on transient failures: 5xx / 429 are server-side or rate-limit blips
   // ("/v3/user-session 500: We're sorry, something went wrong…" is Contentstack's
   // generic 500), and a 401 right at a TOTP rollover clears on a fresh code.
