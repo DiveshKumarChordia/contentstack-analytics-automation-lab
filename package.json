@@ -35,6 +35,9 @@
     "automate:random-users": "node --env-file=.env scripts/automate-with-random-users.mjs",
     "automate:random-users:5": "node --env-file=.env scripts/automate-with-random-users.mjs --users 5 --operations 25",
     "automate:random-users:10": "node --env-file=.env scripts/automate-with-random-users.mjs --users 10 --operations 50",
+    "automate:assigned-users": "node --env-file=.env scripts/automate-with-assigned-users.mjs",
+    "automate:assigned-users:30": "CONTENTSTACK_USER_COUNT=30 CONTENTSTACK_OPERATION_COUNT=100 node --env-file=.env scripts/automate-with-assigned-users.mjs",
+    "automate:assigned-users:50": "CONTENTSTACK_USER_COUNT=50 CONTENTSTACK_OPERATION_COUNT=200 node --env-file=.env scripts/automate-with-assigned-users.mjs",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {
