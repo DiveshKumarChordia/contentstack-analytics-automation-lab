@@ -1112,3 +1112,107 @@ export async function getContentType(base, headers, ctUid) {
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
 }
+
+// =============================================================================
+// Organization Admin APIs (manage org-level user roles and permissions)
+// =============================================================================
+
+/** GET /v4/organizations/{orgUid}/roles — list all organization roles. */
+export async function listOrganizationRoles(base, headers, orgUid, { limit = 100 } = {}) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/roles?${params.toString()}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** GET /v4/organizations/{orgUid}/roles/{roleUid} — get role details. */
+export async function getOrganizationRole(base, headers, orgUid, roleUid) {
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/roles/${encodeURIComponent(roleUid)}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** Find an org role by name. Returns role object or null. */
+export async function findOrganizationRoleByName(base, headers, orgUid, name, domain = 'organization') {
+  const { ok, body } = await listOrganizationRoles(base, headers, orgUid)
+  if (!ok || !Array.isArray(body?.roles)) return null
+  return body.roles.find((r) => r.name === name && r.domain === domain) ?? null
+}
+
+/** GET /v4/organizations/{orgUid}/share/users — list all shared users. */
+export async function listOrganizationUsers(base, headers, orgUid, { limit = 100, skip = 0 } = {}) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  if (skip != null) params.set('skip', String(skip))
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/share/users?${params.toString()}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** POST /v4/organizations/{orgUid}/share — invite user(s) with roles. */
+export async function inviteUserToOrganization(base, headers, orgUid, { emails, roles }) {
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/share`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ emails, roles }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** PATCH /v4/organizations/{orgUid}/share/{userUid} — update user's org roles. */
+export async function updateUserOrganizationRoles(base, headers, orgUid, userUid, roleUids) {
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/share/${encodeURIComponent(userUid)}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ org_roles: roleUids }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** DELETE /v4/organizations/{orgUid}/share/{userUid} — remove user from org. */
+export async function removeUserFromOrganization(base, headers, orgUid, userUid) {
+  const url = `${base}/v4/organizations/${encodeURIComponent(orgUid)}/share/${encodeURIComponent(userUid)}`
+  const res = await fetch(url, { method: 'DELETE', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** Helper: promote user to admin role. */
+export async function promoteUserToAdmin(base, headers, orgUid, userUid) {
+  const { ok: rOk, body: rBody } = await listOrganizationRoles(base, headers, orgUid)
+  if (!rOk || !Array.isArray(rBody?.roles)) return false
+  const adminRole = rBody.roles.find((r) => r.domain === 'organization' && (r.name === 'admin' || r.name === 'owner'))
+  if (!adminRole) return false
+  const { ok: uOk } = await updateUserOrganizationRoles(base, headers, orgUid, userUid, [adminRole.uid])
+  return uOk
+}
+
+/** Helper: downgrade user to member role. */
+export async function downgradeUserToMember(base, headers, orgUid, userUid) {
+  const { ok: rOk, body: rBody } = await listOrganizationRoles(base, headers, orgUid)
+  if (!rOk || !Array.isArray(rBody?.roles)) return false
+  const memberRole = rBody.roles.find((r) => r.domain === 'organization' && r.name === 'member')
+  if (!memberRole) return false
+  const { ok: uOk } = await updateUserOrganizationRoles(base, headers, orgUid, userUid, [memberRole.uid])
+  return uOk
+}
+
+/** Helper: check if user has a specific role by name. */
+export async function userHasRole(base, headers, orgUid, userUid, roleName) {
+  const { ok, body } = await listOrganizationUsers(base, headers, orgUid)
+  if (!ok || !Array.isArray(body?.data)) return false
+  const user = body.data.find((u) => u.uid === userUid || u.user_uid === userUid)
+  if (!user || !Array.isArray(user.org_roles)) return false
+  const { ok: rOk, body: rBody } = await listOrganizationRoles(base, headers, orgUid)
+  if (!rOk || !Array.isArray(rBody?.roles)) return false
+  const roleUid = rBody.roles.find((r) => r.name === roleName)?.uid
+  return roleUid && user.org_roles.includes(roleUid)
+}

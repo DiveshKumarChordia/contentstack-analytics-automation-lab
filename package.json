@@ -25,6 +25,13 @@
     "automate:drive:bootstrap": "node --env-file=.env scripts/drive-all.mjs --mode bootstrap",
     "automate:drive:full": "node --env-file=.env scripts/drive-all.mjs --mode full",
     "automate:drive:ci": "node scripts/drive-all.mjs",
+    "org:list-users": "node --env-file=.env scripts/manage-org-permissions.mjs list-users",
+    "org:list-roles": "node --env-file=.env scripts/manage-org-permissions.mjs list-roles",
+    "org:promote": "node --env-file=.env scripts/manage-org-permissions.mjs promote",
+    "org:demote": "node --env-file=.env scripts/manage-org-permissions.mjs demote",
+    "org:remove": "node --env-file=.env scripts/manage-org-permissions.mjs remove",
+    "org:invite": "node --env-file=.env scripts/manage-org-permissions.mjs invite",
+    "org:check-role": "node --env-file=.env scripts/manage-org-permissions.mjs check-role",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {
