@@ -42,6 +42,11 @@
     "automate:with-roles:balanced": "DISTRIBUTION=balanced CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
     "automate:with-roles:admin-heavy": "DISTRIBUTION=admin_heavy CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
     "automate:with-roles:viewer-heavy": "DISTRIBUTION=viewer_heavy CONTENTSTACK_USER_COUNT=30 node --env-file=.env scripts/automate-with-roles.mjs",
+    "automate:smart-random": "RANDOMIZATION_STRATEGY=pure node --env-file=.env scripts/automate-with-smart-randomization.mjs",
+    "automate:smart-random:weighted": "RANDOMIZATION_STRATEGY=weighted CONTENTSTACK_USER_COUNT=8 CONTENTSTACK_OPERATION_COUNT=40 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
+    "automate:smart-random:balanced": "RANDOMIZATION_STRATEGY=balanced CONTENTSTACK_USER_COUNT=10 CONTENTSTACK_OPERATION_COUNT=50 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
+    "automate:smart-random:roundrobin": "RANDOMIZATION_STRATEGY=roundrobin CONTENTSTACK_USER_COUNT=5 CONTENTSTACK_OPERATION_COUNT=30 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
+    "automate:smart-random:clustered": "RANDOMIZATION_STRATEGY=clustered CONTENTSTACK_USER_COUNT=8 CONTENTSTACK_OPERATION_COUNT=40 node --env-file=.env scripts/automate-with-smart-randomization.mjs",
     "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
   },
   "dependencies": {
