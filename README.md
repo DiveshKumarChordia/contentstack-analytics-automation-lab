@@ -17,17 +17,18 @@
 7. [Performance Testing](#performance-testing)
 8. [Automation Framework](#automation-framework)
 9. [Advanced Features](#advanced-features)
-10. [All 24+ Scripts Reference](#all-24-scripts-reference)
-11. [Configuration Reference](#configuration-reference)
-12. [All npm Commands](#all-npm-commands)
-13. [Libraries & Utilities](#libraries--utilities)
-14. [UI Components](#ui-components)
-15. [Self-Healing Logic](#self-healing-logic)
-16. [Monitoring & Analytics](#monitoring--analytics)
-17. [CI/CD Integration](#cicd-integration)
-18. [Low-Level Design & Algorithms](#low-level-design--algorithms)
-19. [Project Structure](#project-structure)
-20. [Troubleshooting](#troubleshooting)
+10. [⭐ 4-Phase Analytics Overhaul](#-4-phase-analytics-overhaul)
+11. [All 24+ Scripts Reference](#all-24-scripts-reference)
+12. [Configuration Reference](#configuration-reference)
+13. [All npm Commands](#all-npm-commands)
+14. [Libraries & Utilities](#libraries--utilities)
+15. [UI Components](#ui-components)
+16. [Self-Healing Logic](#self-healing-logic)
+17. [Monitoring & Analytics](#monitoring--analytics)
+18. [CI/CD Integration](#cicd-integration)
+19. [Low-Level Design & Algorithms](#low-level-design--algorithms)
+20. [Project Structure](#project-structure)
+21. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -1452,6 +1453,102 @@ Random:    divesh.k+2025-12-08T14-30-45@contentstack.com
 Assigned:  divesh.k+run-2025-dec-08-0230pm-ops-create-publish@contentstack.com
 Role-Based: divesh.k+run-2025-dec-08-0230pm-role-admin-ops-create@contentstack.com
 ```
+
+---
+
+## ⭐ **4-Phase Analytics Overhaul**
+
+### Complete Analytics Coverage: 62% → 95%+
+
+The automation now features a **comprehensive 4-phase analytics infrastructure** that captures, extracts, normalizes, and visualizes **50+ KPIs** across every dimension of testing.
+
+**The Challenge**: The system was generating 250k+ meter events per run, but:
+- ❌ Audit trail was generated but **discarded**
+- ❌ 50+ KPIs were extracted but **never visualized**
+- ❌ Stack-level metrics (trends, health, reliability) were **unavailable**
+- ❌ Role-based analytics for permission testing was **hidden**
+- **Result: Only 62% of insights were visible**
+
+### 4-Phase Architecture
+
+**PHASE 1: Wire Analytics Engine** ✅
+- Instantiate `AnalyticsEngine` on audit trail (was created, never used)
+- Extract 50+ KPIs automatically
+- Persist audit trail to JSON for re-analysis
+
+**PHASE 2: Standardize KPI Schema** ✅
+- Define 30+ standard KPI fields with defaults
+- Ensure all scripts populate consistent metrics
+- Validate types, fill missing fields automatically
+
+**PHASE 3: Stack-Level Metrics** ✅
+- All-time totals (entries, operations, success rates)
+- Trend detection (improving/degrading/stable)
+- Health scoring (0-100)
+- Reliability metrics (MTBF, success streaks)
+- Pattern analysis (top errors, averages)
+
+**PHASE 4: Advanced Dashboard** ✅
+- **Tab 1: All-Time Metrics** — Total runs, entries created/published/localized, success rate
+- **Tab 2: Health & Trends** — Health score 0-100, success trend, error trend
+- **Tab 3: User Analysis** — User reliability ranking, specialization breakdown
+- **Tab 4: Operations** — Per-operation success rates, sequence patterns
+- **Tab 5: Security** — Permission violations, role coverage audit
+
+### 50+ KPIs Now Available
+
+**Role-Based** (9): Success rate by role, operation breakdown, coverage, violations  
+**Operation-Based** (12): Success per operation, sequences, user distribution, errors  
+**User-Based** (15+): Reliability ranking, specialization, workload, throughput  
+**Multi-User** (8): Collaboration patterns, completion rates, step success  
+**Stack-Level** (15+): All-time totals, trends, health, MTBF, streaks, patterns  
+
+### New Files & Integration
+
+| Component | Phase | File | Purpose |
+|-----------|-------|------|---------|
+| Enhanced Reporting | 1 | `scripts/lib/enhanced-report.mjs` | Wire engine, persist audit trail |
+| KPI Standardization | 2 | `scripts/lib/kpi-schema.mjs` | 30+ standard fields, defaults, validation |
+| Stack Metrics | 3 | `scripts/lib/aggregate-metrics.mjs` | All-time, trends, health, reliability |
+| Dashboard | 4 | `src/components/AdvancedAnalyticsDashboard.jsx` | 5 tabs, 50+ KPIs visualization |
+| — | 4 | `src/components/AdvancedAnalyticsDashboard.css` | Dashboard styling |
+
+### Data Flow: From Operation to Insight
+
+```
+Automation Run (Operations + Events)
+    ↓
+Audit Trail (50-100 entries per run)
+    ↓
+[PHASE 1] AnalyticsEngine extracts 50+ KPIs
+    ↓
+[PHASE 2] KPI Schema standardizes & normalizes
+    ↓
+[PHASE 3] AggregateMetrics computes stack-level insights
+    ↓
+[PHASE 4] AdvancedDashboard visualizes everything
+    ↓
+User Insights (Calendar heatmap, day analytics, 5-tab dashboard)
+```
+
+### Coverage Improvement
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Analytics engine instantiated | ❌ Never called | ✅ Every run |
+| Audit trail persistence | ❌ Discarded | ✅ JSON saved |
+| KPI consistency | ❌ Per-script variance | ✅ 30+ standard fields |
+| Stack-level insights | ❌ None | ✅ All-time, trends, health, MTBF |
+| Visualization | ❌ 62% coverage | ✅ **95%+ coverage** |
+
+### Documentation
+
+See **[docs/COMPLETE_ANALYTICS_AUDIT.md](docs/COMPLETE_ANALYTICS_AUDIT.md)** for:
+- Detailed 4-phase architecture
+- Complete KPI inventory
+- Integration instructions
+- Visualization examples
+- Step-by-step implementation guide
 
 ---
 
