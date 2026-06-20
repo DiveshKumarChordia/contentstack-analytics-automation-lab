@@ -61,170 +61,172 @@ graph TB
 
 ### Bootstrap Flow
 
-```
-User / CI                Automation                Contentstack
-  │                           │                          │
-  │─── --mode bootstrap ───────>│                         │
-  │                           │                          │
-  │                           │─── Create CTs ──────────>│
-  │                           │<──── CT UIDs ────────────│
-  │                           │                          │
-  │                           │─── Create Locales ──────>│
-  │                           │<──── Locale Codes ───────│
-  │                           │                          │
-  │                           │─── Create Branches ─────>│
-  │                           │<──── Branch UIDs ────────│
-  │                           │                          │
-  │                           │─── Create Workflows ────>│
-  │                           │<──── WF UIDs, Stages ───│
-  │                           │                          │
-  │                           │─── Share Stack (Roles) ->│
-  │                           │<──── RBAC Records ───────│
-  │                           │                          │
-  │<─── Bootstrap Complete ────│                         │
-  │                           │                          │
-  │                   (public/run-history.json appended)  │
-  │                           │                          │
+```mermaid
+sequenceDiagram
+    actor User as User/CI
+    participant Auto as Automation
+    participant Stack as Contentstack
+    
+    User->>Auto: --mode bootstrap
+    Auto->>Stack: Create Content Types
+    Stack-->>Auto: CT UIDs
+    Auto->>Stack: Create Locales
+    Stack-->>Auto: Locale Codes
+    Auto->>Stack: Create Branches
+    Stack-->>Auto: Branch UIDs
+    Auto->>Stack: Create Workflows
+    Stack-->>Auto: Workflow UIDs, Stages
+    Auto->>Stack: Share Stack (RBAC)
+    Stack-->>Auto: RBAC Records
+    Auto-->>User: Bootstrap Complete
+    Note over Auto: public/run-history.json appended
 ```
 
 ### Periodic Entry Lifecycle
 
-```
-User / CI                Automation                Contentstack
-  │                           │                          │
-  │─ --mode periodic ─────────>│                         │
-  │                           │                          │
-  │                    [Retention Phase]                 │
-  │                           │                          │
-  │                           │─── List Entries (age) ─→ │
-  │                           │<─ Entries by created_at ─│
-  │                           │                          │
-  │                           │─── Delete (3 bands) ───→ │
-  │                           │<──── Delete Counts ──────│
-  │                           │                          │
-  │                    [Backfill Phase]                  │
-  │                           │                          │
-  │                           │─── List Trashed ──────→  │
-  │                           │<─ Trashed Entry UIDs ───│
-  │                           │                          │
-  │                           │─── Restore Entries ────→ │
-  │                           │<──── Restore Counts ─────│
-  │                           │                          │
-  │                    [Creation Phase]                  │
-  │                           │                          │
-  │                           │─── Create 10k Entries ──→│
-  │                           │<──── Entry UIDs (batch) ─│
-  │                           │   (emit entry_created)   │
-  │                           │                          │
-  │                    [Localization Phase]              │
-  │                           │                          │
-  │                           │─── Localize Entries ────→│
-  │                           │<─ Localized (by locale) ─│
-  │                           │ (emit entry_created x5)  │
-  │                           │                          │
-  │                    [Publishing Phase]                │
-  │                           │                          │
-  │                           │─── Publish/Unpublish ───→│
-  │                           │<──── Publish Counts ─────│
-  │                           │ (emit entry_published)   │
-  │                           │                          │
-  │                    [Workflow Phase]                  │
-  │                           │                          │
-  │                           │─── Transition Entries ──→│
-  │                           │<──── Transition Counts ──│
-  │                           │(emit entry_workflow_*)   │
-  │                           │                          │
-  │                    [Branch & User Phases]            │
-  │                           │                          │
-  │                           │─── Multi-branch ops ────→│
-  │                           │─── Invite Users (UI) ──→ │
-  │                           │                          │
-  │<─── Periodic Complete ─────│                         │
-  │                           │                          │
+```mermaid
+sequenceDiagram
+    actor User as User/CI
+    participant Auto as Automation
+    participant Stack as Contentstack
+    
+    User->>Auto: --mode periodic
+    
+    rect rgb(200, 150, 255)
+    Note over Auto,Stack: Retention Phase
+    Auto->>Stack: List Entries (by age)
+    Stack-->>Auto: Entries by created_at
+    Auto->>Stack: Delete (3 age bands)
+    Stack-->>Auto: Delete Counts
+    end
+    
+    rect rgb(200, 200, 255)
+    Note over Auto,Stack: Backfill Phase
+    Auto->>Stack: List Trashed
+    Stack-->>Auto: Trashed Entry UIDs
+    Auto->>Stack: Restore Entries
+    Stack-->>Auto: Restore Counts
+    end
+    
+    rect rgb(255, 200, 200)
+    Note over Auto,Stack: Creation Phase
+    Auto->>Stack: Create 10,000 Entries
+    Stack-->>Auto: Entry UIDs
+    Note over Stack: emit entry_created x10k
+    end
+    
+    rect rgb(255, 220, 150)
+    Note over Auto,Stack: Localization Phase
+    Auto->>Stack: Localize Entries
+    Stack-->>Auto: Localized (by locale)
+    Note over Stack: emit entry_created x50k (5 locales)
+    end
+    
+    rect rgb(255, 200, 255)
+    Note over Auto,Stack: Publishing Phase
+    Auto->>Stack: Publish/Unpublish
+    Stack-->>Auto: Publish Counts
+    Note over Stack: emit entry_published/unpublished
+    end
+    
+    rect rgb(200, 255, 200)
+    Note over Auto,Stack: Workflow Phase
+    Auto->>Stack: Transition Entries
+    Stack-->>Auto: Transition Counts
+    Note over Stack: emit entry_workflow_*
+    end
+    
+    rect rgb(255, 255, 200)
+    Note over Auto,Stack: Branch & User Phases
+    Auto->>Stack: Multi-branch ops
+    Auto->>Stack: Invite Users (UI)
+    end
+    
+    Auto-->>User: Periodic Complete
 ```
 
 ### Multi-Actor Create-Publish Sequence
 
-```
-Actor A (Creator)      Automation              Contentstack        Actor B (Publisher)
-     │                      │                       │                      │
-     │ login                 │                       │                      │
-     │──────────────────────>│                       │                      │
-     │                       │── authenticate ─────->│                      │
-     │                       │<─ authtoken ──────────│                      │
-     │                       │                       │                      │
-     │                       │── create entries ────→│                      │
-     │                       │<── entry UIDs ────────│                      │
-     │                       │  (entry_created events)                      │
-     │                       │                       │                      │
-     │ [auto-pick from org] ─────────────────────────────────────────────────>
-     │ [assign CMS role]    ────────────────────────>│                      │
-     │                       │                       │ (user exists w/ role)
-     │                       │── transition to approved ──────→             │
-     │                       │<─ transition ACKs ────│                      │
-     │                       │(entry_workflow_stage_updated)                │
-     │                       │                       │                      │
-     │                       │                       │<─ actor B login ────│
-     │                       │────── authenticate ──────────────────────────>
-     │                       │<─ authtoken ──────────────────────────────────│
-     │                       │                       │                      │
-     │                       │── publish entries ────────────────────────────>
-     │                       │<────── publish ACKs ──────────────────────────│
-     │                       │(entry_published events keyed by publisher UID)
-     │                       │                       │                      │
-     │<─ report ─────────────│                       │                      │
-     │  creator_uid: A       │                       │                      │
-     │  publisher_uid: B     │                       │                      │
-     │  entries_created: 10  │                       │                      │
-     │  entries_published: 8 │                       │                      │
-     │                       │                       │                      │
+```mermaid
+sequenceDiagram
+    actor A as Actor A<br/>(Creator)
+    participant Auto as Automation
+    participant Stack as Contentstack
+    actor B as Actor B<br/>(Publisher)
+    
+    A->>Auto: login
+    Auto->>Stack: authenticate
+    Stack-->>Auto: authtoken A
+    
+    Auto->>Stack: create entries
+    Stack-->>Auto: Entry UIDs
+    Note over Stack: emit entry_created
+    
+    Note over A,B: Auto-pick B from org
+    Note over A,B: Auto-assign CMS role to B
+    
+    Auto->>Stack: transition to approved
+    Stack-->>Auto: transition ACKs
+    Note over Stack: emit entry_workflow_stage_updated
+    
+    B->>Auto: login
+    Auto->>Stack: authenticate
+    Stack-->>Auto: authtoken B
+    
+    Auto->>Stack: publish entries
+    Stack-->>Auto: publish ACKs
+    Note over Stack: emit entry_published (publisher: B)
+    
+    Auto-->>A: Report
+    Note over A: creator_uid: A<br/>publisher_uid: B<br/>entries_created: 10<br/>entries_published: 8
 ```
 
 ### Self-Healing: Missing CMS Role
 
-```
-Automation                     Contentstack                      Org Admin
-     │                               │                               │
-     │─── auto-pick user ───────────────────────────────────────────>
-     │<─── user object (no CMS role) ──────────────────────────────── │
-     │                               │                               │
-     │─── check hasRole? ──────────>│                               │
-     │<─── false (no RBAC record)    │                               │
-     │                               │                               │
-     │─ listStackRoles ────────────>│                               │
-     │<─ [role_uid, role_uid] ─────│                               │
-     │                               │                               │
-     │─ shareStack(email, role_uid)────────────────────────────────>
-     │                               │<─ add RBAC record ──────────│
-     │<────── shareStack ACK ────────────────────────────────────────│
-     │                               │                               │
-     │✓ User now has CMS role       │                               │
-     │                               │                               │
-     │─ proceed with test ────────>│                               │
-     │                               │                               │
+```mermaid
+sequenceDiagram
+    participant Auto as Automation
+    participant Stack as Contentstack
+    participant OrgAdmin as Org Admin
+    
+    Auto->>OrgAdmin: auto-pick user
+    OrgAdmin-->>Auto: user object (no CMS role)
+    
+    Auto->>Stack: check hasRole?
+    Stack-->>Auto: false (no RBAC record)
+    
+    Auto->>Stack: listStackRoles()
+    Stack-->>Auto: [role_uid1, role_uid2, ...]
+    
+    Auto->>OrgAdmin: shareStack(email, role_uid)
+    OrgAdmin->>Stack: add RBAC record
+    OrgAdmin-->>Auto: shareStack ACK
+    
+    Note over Auto: ✓ User now has CMS role
+    
+    Auto->>Stack: proceed with test
 ```
 
 ### Self-Healing: Missing Locale
 
-```
-Automation                     Contentstack
-     │                               │
-     │─── localize to en-gb ───────>│
-     │<─── 422 "Language not found" │
-     │                               │
-     │─── listLocales ────────────>│
-     │<─── [en-us, en-ca, ...] ────│
-     │                               │
-     │ (en-gb not in list)          │
-     │                               │
-     │─── createLocale ────────────>│
-     │  (code: en-gb,              │
-     │   fallback_locale: en-us)    │
-     │<─── 201 Created ────────────│
-     │                               │
-     │─── localize to en-gb ───────>│
-     │<─── 201 Localized ──────────│
-     │                               │
+```mermaid
+sequenceDiagram
+    participant Auto as Automation
+    participant Stack as Contentstack
+    
+    Auto->>Stack: localize to en-gb
+    Stack-->>Auto: 422 "Language not found"
+    
+    Auto->>Stack: listLocales()
+    Stack-->>Auto: [en-us, en-ca, ...]
+    
+    Note over Auto: (en-gb not in list)
+    
+    Auto->>Stack: createLocale(code: en-gb, fallback: en-us)
+    Stack-->>Auto: 201 Created
+    
+    Auto->>Stack: localize to en-gb (retry)
+    Stack-->>Auto: 201 Localized
 ```
 
 ---
