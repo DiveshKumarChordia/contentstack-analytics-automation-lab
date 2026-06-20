@@ -863,8 +863,16 @@ graph TB
                 C6["branch-locale-deletion"]
             end
             
-            subgraph UserMgmt["User Management"]
+            subgraph UserMgmt["User Management & Multi-User Automation"]
                 U1["invite-users<br/>(10 new/run)"]
+                U1M["Multi-User Creation System (NEW)"]
+                U1M1["Mode 1: Random Users<br/>(Gmail plus addressing)"]
+                U1M2["Mode 2: Assigned Operations<br/>(pre-assigned ops per user)"]
+                U1M3["Mode 3: Role-Based<br/>(5 test simulation roles)"]
+                U1 --> U1M
+                U1M --> U1M1
+                U1M --> U1M2
+                U1M --> U1M3
             end
             
             subgraph Utilities["Utilities & Standalone"]

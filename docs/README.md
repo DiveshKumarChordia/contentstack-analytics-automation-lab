@@ -123,29 +123,117 @@ cat step-reports/automate-with-roles.json | jq .
 
 ## 🏗️ System Architecture
 
+### Layered System Design
+
 ```
-┌─────────────────────────────────────────────────┐
-│         Automation Orchestration                 │
-├─────────────────────────────────────────────────┤
-│ automate-with-random-users.mjs                  │
-│ automate-with-assigned-users.mjs                │
-│ automate-with-roles.mjs                         │
-├─────────────────────────────────────────────────┤
-│           User Creation & Assignment             │
-├─────────────────────────────────────────────────┤
-│ user-factory.mjs       - Random users           │
-│ user-factory-v2.mjs    - Assigned operations    │
-│ role-based-factory.mjs - Role distribution      │
-├─────────────────────────────────────────────────┤
-│          Core Libraries & Utilities              │
-├─────────────────────────────────────────────────┤
-│ gmail-utils.mjs        - Plus addressing        │
-│ user-assignment.mjs    - Operation assignment   │
-│ role-based-users.mjs   - Role definitions       │
-│ cma.mjs                - API helpers            │
-│ logger.mjs             - Structured logging     │
-│ report.mjs             - Report generation      │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    AUTOMATION ORCHESTRATION LAYER                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ automate-with-random-users.mjs → 5-10 users, random operations             │
+│ automate-with-assigned-users.mjs → 30 users with pre-assigned operations   │
+│ automate-with-roles.mjs → 30 users with TEST SIMULATION ROLES              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                        ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               USER CREATION & DISTRIBUTION LAYER                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ user-factory.mjs                                                            │
+│  └─ createMultipleTestUsers() → UserPool for tracking                      │
+│                                                                              │
+│ user-factory-v2.mjs                                                         │
+│  └─ createUsersWithOperationAssignments() → UserBatch with audit trail    │
+│                                                                              │
+│ role-based-factory.mjs                                                      │
+│  ├─ createRoleBasedUsers() + DISTRIBUTION_STRATEGIES                       │
+│  └─ RoleBasedUserBatch → Analytics & multi-user operations                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                        ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              CORE LIBRARIES & UTILITIES LAYER                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ gmail-utils.mjs → Email generation with plus addressing                    │
+│ user-assignment.mjs → Operation assignment with human-readable dates       │
+│ role-based-users.mjs → ROLES + MULTI_USER_OPERATIONS definitions           │
+│ logger.mjs → Structured logging (DEBUG/INFO/WARN/ERROR)                    │
+│ cma.mjs + report.mjs → API helpers & report generation                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Three Automation Modes
+
+```mermaid
+graph LR
+    subgraph Mode1["MODE 1: Random Users"]
+        R1["Generate unique emails<br/>with Gmail plus addressing"]
+        R2["Perform random operations<br/>per user"]
+        R3["Track execution & results"]
+        R1 --> R2 --> R3
+    end
+    
+    subgraph Mode2["MODE 2: Assigned Operations"]
+        A1["Encode operations<br/>in email address"]
+        A2["Pre-assign specific ops<br/>to each user"]
+        A3["Track assigned vs<br/>actually performed"]
+        A1 --> A2 --> A3
+    end
+    
+    subgraph Mode3["MODE 3: Role-Based"]
+        B1["Distribute users<br/>across 5 test roles"]
+        B2["Enforce role-based<br/>operation permissions"]
+        B3["Execute multi-user<br/>collaborative workflows"]
+        B1 --> B2 --> B3
+    end
+    
+    style Mode1 fill:#e8f4f8,stroke:#0080ff,stroke-width:2px,color:#000
+    style Mode2 fill:#f0e8f4,stroke:#9933ff,stroke-width:2px,color:#000
+    style Mode3 fill:#f4e8e8,stroke:#ff6633,stroke-width:2px,color:#000
+```
+
+### Multi-User Collaborative Workflows
+
+```mermaid
+graph TD
+    REC["review-and-publish<br/>Editor → Admin"]
+    REC --> RECA["1. Editor creates entry<br/>2. Editor transitions workflow<br/>3. Admin publishes"]
+    
+    COLL["collaborative-create<br/>Contributor → Editor"]
+    COLL --> COLLA["1. Contributor creates draft<br/>2. Editor refines & publishes"]
+    
+    OWN["owner-approval-publish<br/>Editor → Admin → Owner"]
+    OWN --> OWNA["1. Editor creates entry<br/>2. Admin reviews/transitions<br/>3. Owner approves & publishes"]
+    
+    BULK["bulk-localize-publish<br/>Editor → Admin"]
+    BULK --> BULKA["1. Editor localizes to languages<br/>2. Admin publishes in bulk"]
+    
+    DEL["delete-and-purge<br/>Owner only"]
+    DEL --> DELA["1. Owner permanently deletes entry"]
+    
+    style REC fill:#e8f4f8,stroke:#0080ff,stroke-width:2px
+    style COLL fill:#e8f4f8,stroke:#0080ff,stroke-width:2px
+    style OWN fill:#e8f4f8,stroke:#0080ff,stroke-width:2px
+    style BULK fill:#e8f4f8,stroke:#0080ff,stroke-width:2px
+    style DEL fill:#e8f4f8,stroke:#0080ff,stroke-width:2px
+```
+
+### Email Format Encoding
+
+```
+┌─ MODE 1: Random Users ─────────────────────────────────────┐
+│ divesh.k+2025-12-08T14-30-45@contentstack.com              │
+│          │ Numeric timestamp (milliseconds since epoch)    │
+└────────────────────────────────────────────────────────────┘
+
+┌─ MODE 2: Assigned Operations ──────────────────────────────┐
+│ divesh.k+run-2025-dec-08-0230pm-ops-create-publish@...     │
+│          │ Run ID (human time) │ Operations assigned       │
+└────────────────────────────────────────────────────────────┘
+
+┌─ MODE 3: Role-Based Users ─────────────────────────────────┐
+│ divesh.k+run-2025-dec-08-0230pm-role-admin-ops-create@...  │
+│          │ Run ID               │ Test Role │ Available Ops│
+└────────────────────────────────────────────────────────────┘
+
+⚠️ CRITICAL: Test roles are FOR TESTING ONLY, not real CMS roles
 ```
 
 ---
@@ -171,6 +259,139 @@ divesh.k+run-2025-dec-08-0230pm-ops-create-publish-workflow@contentstack.com
 divesh.k+run-2025-dec-08-0230pm-role-admin-ops-create-publish@contentstack.com
           └────────────────────┘ └──────┘ └──────────────┘
          Run ID (human time)    Role   Operations available
+```
+
+---
+
+## 🎯 Role Hierarchy & Permission Matrix
+
+### Test Simulation Role Levels
+
+```mermaid
+graph TD
+    subgraph Level5["LEVEL 5: Owner (1)"]
+        O["All Operations<br/>14 capabilities<br/>Can delete stack"]
+    end
+    
+    subgraph Level4["LEVEL 4: Admin (3)"]
+        A["Most Operations<br/>11 capabilities<br/>Cannot delete stack"]
+    end
+    
+    subgraph Level3["LEVEL 3: Editor (9)"]
+        E["Content Management<br/>8 capabilities<br/>Create, publish, localize"]
+    end
+    
+    subgraph Level2["LEVEL 2: Contributor (12)"]
+        C["Create & Edit<br/>4 capabilities<br/>Cannot publish alone"]
+    end
+    
+    subgraph Level1["LEVEL 1: Viewer (5)"]
+        V["Read-Only<br/>2 capabilities<br/>List entries/assets only"]
+    end
+    
+    O -.-> A
+    A -.-> E
+    E -.-> C
+    C -.-> V
+    
+    style Level5 fill:#8b0000,stroke:#fff,color:#fff
+    style Level4 fill:#cc3300,stroke:#fff,color:#fff
+    style Level3 fill:#ff9900,stroke:#fff,color:#fff
+    style Level2 fill:#ffcc00,stroke:#000,color:#000
+    style Level1 fill:#cccccc,stroke:#000,color:#000
+```
+
+### Permission Matrix by Role
+
+```
+┌──────────────┬───────┬───────┬────────┬─────────────┬────────┐
+│ Operation    │ Owner │ Admin │ Editor │ Contributor │ Viewer │
+├──────────────┼───────┼───────┼────────┼─────────────┼────────┤
+│ create-entry │   ✓   │   ✓   │   ✓    │      ✓      │   ✗    │
+│ publish      │   ✓   │   ✓   │   ✓    │      ✗      │   ✗    │
+│ delete       │   ✓   │   ✓   │   ✗    │      ✗      │   ✗    │
+│ workflow     │   ✓   │   ✓   │   ✓    │      ✗      │   ✗    │
+│ localize     │   ✓   │   ✓   │   ✓    │      ✗      │   ✗    │
+│ list         │   ✓   │   ✓   │   ✓    │      ✓      │   ✓    │
+│ manage-roles │   ✓   │   ✓   │   ✗    │      ✗      │   ✗    │
+│ delete-stack │   ✓   │   ✗   │   ✗    │      ✗      │   ✗    │
+└──────────────┴───────┴───────┴────────┴─────────────┴────────┘
+
+PYRAMID DISTRIBUTION (Realistic):
+├─ Owner: 1 (3%)
+├─ Admin: 3 (10%)
+├─ Editor: 9 (30%)
+├─ Contributor: 12 (40%)
+└─ Viewer: 5 (17%)
+Total: 30 users
+```
+
+### Distribution Strategies
+
+```mermaid
+graph LR
+    subgraph Pyramid["📊 PYRAMID (Realistic)"]
+        PY["1 Owner<br/>3 Admins<br/>9 Editors<br/>12 Contributors<br/>5 Viewers<br/>=30 total"]
+    end
+    
+    subgraph Balanced["⚖️ BALANCED"]
+        BA["6 Owners<br/>6 Admins<br/>6 Editors<br/>6 Contributors<br/>6 Viewers<br/>=30 total"]
+    end
+    
+    subgraph AdminHeavy["👨‍💼 ADMIN-HEAVY"]
+        AH["1 Owner<br/>12 Admins<br/>9 Editors<br/>6 Contributors<br/>2 Viewers<br/>=30 total"]
+    end
+    
+    subgraph ViewerHeavy["👁️ VIEWER-HEAVY"]
+        VH["1 Owner<br/>3 Admins<br/>4 Editors<br/>7 Contributors<br/>15 Viewers<br/>=30 total"]
+    end
+    
+    style Pyramid fill:#2e8b57,stroke:#fff,color:#fff
+    style Balanced fill:#4169e1,stroke:#fff,color:#fff
+    style AdminHeavy fill:#ff8c00,stroke:#fff,color:#fff
+    style ViewerHeavy fill:#8b4513,stroke:#fff,color:#fff
+```
+
+### Complete Automation Flow
+
+```mermaid
+sequenceDiagram
+    participant Start as Automation Script
+    participant Factory as User Factory
+    participant Logger as Logger
+    participant CMS as CMS API
+    participant Report as Report Generator
+    
+    Start->>Factory: Create users (30, pyramid)
+    Factory->>Logger: Creating users... (INFO)
+    Factory->>CMS: POST /invite-user
+    Factory->>CMS: POST /assign-role (org-level)
+    Factory->>CMS: POST /assign-role (stack-level)
+    Factory-->>Start: Return UserBatch
+    
+    Start->>Start: Execute operations by role
+    loop For each user
+        Start->>Logger: User-Op Details (DEBUG)
+        Start->>CMS: Perform operation (create, publish, etc)
+        alt Success
+            Start->>Logger: Operation succeeded (INFO)
+        else Failure
+            Start->>Logger: Operation failed (WARN/ERROR)
+        end
+        Start->>Start: Record operation result
+    end
+    
+    Start->>Start: Execute multi-user operations
+    Start->>CMS: Multi-user op step 1 (Editor)
+    Start->>CMS: Multi-user op step 2 (Admin/Owner)
+    Start->>Logger: Multi-user operation recorded (INFO)
+    
+    Start->>Report: Generate reports
+    Report-->>Report: Calculate statistics
+    Report-->>Report: Create audit trail
+    Report-->>Start: JSON report
+    
+    Start->>Logger: Automation complete (INFO)
 ```
 
 ---
