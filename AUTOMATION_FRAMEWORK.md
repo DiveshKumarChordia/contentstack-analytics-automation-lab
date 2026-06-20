@@ -19,98 +19,74 @@ This framework automates complex content lifecycle patterns in Contentstack to:
 
 ### High-Level Flow
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│               GitHub Actions / Manual Trigger                │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    drive-all.mjs                             │
-│          (Orchestrator: Bootstrap or Periodic)               │
-└────────┬──────────────┬──────────────┬──────────────────────┘
-         │              │              │
-    ┌────▼──────┐  ┌────▼──────┐  ┌───▼────────────┐
-    │ Bootstrap  │  │  Periodic  │  │  Full (B + P)  │
-    └────┬──────┘  └────┬──────┘  └───┬────────────┘
-         │              │             │
-         ▼              ▼             ▼
-    ┌────────────────────────────────────────────┐
-    │   Phase 1: Content Foundation (Bootstrap)  │
-    │  ├─ Create Content Types from manifest     │
-    │  ├─ Create Locales (with fallback chains)  │
-    │  ├─ Create Branches                        │
-    │  ├─ Create Workflows                       │
-    │  └─ Create Publishing Rules                │
-    └────────┬─────────────────────────────────┘
-             │
-             ▼
-    ┌────────────────────────────────────────────┐
-    │   Phase 2: Periodic Entry Lifecycle       │
-    │  ├─ Delete Old Entries (tiered retention) │
-    │  ├─ Backfill Aged Entries (from trash)    │
-    │  ├─ Create Periodic Entries (10k/run)     │
-    │  ├─ Localize Entries (multi-locale)       │
-    │  ├─ Bulk Publish/Unpublish Cycle          │
-    │  ├─ Workflow Transitions (5 patterns)     │
-    │  ├─ Churn Orphan Cases (edge cases)       │
-    │  ├─ Branch Lifecycle (30-branch lineage)  │
-    │  └─ Meter-Coverage Scenarios (6 types)    │
-    │     ├─ Edit-after-publish                 │
-    │     ├─ Permanent-deletes                  │
-    │     ├─ Aged-stalls                        │
-    │     ├─ No-workflow-ct                     │
-    │     ├─ Multi-actor-create-publish         │
-    │     └─ Branch-locale-deletion             │
-    └────────┬─────────────────────────────────┘
-             │
-             ▼
-    ┌────────────────────────────────────────────┐
-    │   Phase 3: User Management                 │
-    │  └─ Invite 10 Users + Auto-assign Roles   │
-    └────────┬─────────────────────────────────┘
-             │
-             ▼
-    ┌────────────────────────────────────────────┐
-    │   Phase 4: Analytics Reporting            │
-    │  └─ Report KPIs to Dashboard               │
-    │     (public/run-history.json)              │
-    └────────────────────────────────────────────┘
+```mermaid
+graph TD
+    A["GitHub Actions / Manual Trigger"] --> B["drive-all.mjs<br/>(Orchestrator)"]
+    B --> C{Mode}
+    C -->|bootstrap| D["Phase 1: Bootstrap<br/>Create CTs, Locales, Branches<br/>Workflows, Publishing Rules"]
+    C -->|periodic| E["Phase 2: Periodic<br/>Delete, Backfill, Create 10k<br/>Localize 5x, Publish/Unpublish<br/>Transitions, Churn, Branch"]
+    C -->|full| F["Bootstrap + Periodic"]
+    F --> D
+    F --> E
+    D --> G["Phase 3: User Management<br/>Invite 10 Users + Assign Roles"]
+    E --> G
+    G --> H["Phase 4: Report KPIs<br/>public/run-history.json"]
 ```
 
 ### Data Flow (This Repo Only)
 
 **This repository performs CMA operations. Downstream systems handle analytics pipeline.**
 
-```
-Automation Operations (This Repo)
-    │
-    ├─ Create Entries ───────► Triggers entry_created events
-    │
-    ├─ Delete Entries ───────► Triggers entry_deleted events
-    │
-    ├─ Restore Entries ──────► Triggers entry_restored events
-    │
-    ├─ Transition Workflows ─► Triggers entry_workflow_stage_* events
-    │
-    ├─ Publish/Unpublish ───► Triggers entry_published/unpublished events
-    │
-    ├─ Localize Entries ────► Triggers entry_created (with locale dimension)
-    │
-    ├─ User Invitations ────► Triggers user_created, role assignment events
-    │
-    └─ Branch Operations ───► Triggers branch-related events
-                │
-                ▼
-    [Events go to Contentstack infrastructure]
-                │
-    ┌───────────┴──────────────┐
-    │ Downstream (Not our repo)│
-    ├───────────┬──────────────┤
-    ▼           ▼              ▼
-  Kafka    Mongo         External Systems
-(consumed) (analytics-   (dashboards,
-            data-sync)    reporting)
+```mermaid
+graph LR
+    subgraph OurRepo["OUR REPO: Automation Operations"]
+        CREATE["Create Entries"]
+        DELETE["Delete Entries"]
+        RESTORE["Restore Entries"]
+        TRANS["Transition Workflows"]
+        PUBLISH["Publish/Unpublish"]
+        LOCALIZE["Localize Entries"]
+        INVITE["User Invitations"]
+        BRANCH["Branch Operations"]
+    end
+    
+    subgraph Events["Triggers Events"]
+        E1["entry_created"]
+        E2["entry_deleted"]
+        E3["entry_restored"]
+        E4["entry_workflow_*"]
+        E5["entry_published"]
+        E6["entry_created<br/>(locale dim)"]
+        E7["user_created"]
+        E8["branch_*"]
+    end
+    
+    subgraph Downstream["DOWNSTREAM (External Systems)"]
+        KAFKA["Kafka<br/>(consumed by)"]
+        MONGO["Mongo<br/>(analytics-data-sync)"]
+        EXT["Dashboards<br/>Reporting"]
+    end
+    
+    CREATE --> E1
+    DELETE --> E2
+    RESTORE --> E3
+    TRANS --> E4
+    PUBLISH --> E5
+    LOCALIZE --> E6
+    INVITE --> E7
+    BRANCH --> E8
+    
+    E1 --> KAFKA
+    E2 --> KAFKA
+    E3 --> KAFKA
+    E4 --> KAFKA
+    E5 --> KAFKA
+    E6 --> KAFKA
+    E7 --> KAFKA
+    E8 --> KAFKA
+    
+    KAFKA --> MONGO
+    MONGO --> EXT
 ```
 
 ---

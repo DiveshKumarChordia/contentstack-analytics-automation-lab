@@ -2,74 +2,57 @@
 
 ## High-Level Architecture (HLA)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Contentstack CMS Stack                                │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  CMA API     │  │  Delivery    │  │  Org Admin   │  │  Auth SDK    │  │
-│  │  (REST)      │  │  API         │  │  Portal      │  │  (Auth)      │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
-│         │                 │                  │                 │           │
-└─────────┼─────────────────┼──────────────────┼─────────────────┼───────────┘
-          │                 │                  │                 │
-          │ writes          │ reads            │ invites         │ validates
-          │                 │                  │ & manages       │ permissions
-          ▼                 ▼                  ▼                 ▼
-    ┌────────────────────────────────────────────────────────────────────┐
-    │              Contentstack Metering Automation Framework             │
-    │  ┌──────────────────────────────────────────────────────────────┐  │
-    │  │           Scripts Layer (orchestration)                       │  │
-    │  │  ┌─────────────────────┐        ┌──────────────────────────┐ │  │
-    │  │  │  drive-all.mjs      │        │  lib/cma.mjs             │ │  │
-    │  │  │  (Bootstrap/        │────────│  (CMA helpers +          │ │  │
-    │  │  │   Periodic/Full)    │        │   self-healing logic)    │ │  │
-    │  │  └────────┬────────────┘        └──────────────────────────┘ │  │
-    │  │           │                                                    │  │
-    │  │      ┌────┴────────────────────────────────────────────┐      │  │
-    │  │      │ Delegates to Phase-Specific Scripts:            │      │  │
-    │  │      ├─ bootstrap-from-manifest.mjs                   │      │  │
-    │  │      ├─ seed-locales-branches.mjs                     │      │  │
-    │  │      ├─ seed-workflows.mjs                            │      │  │
-    │  │      ├─ delete-old-entries.mjs                        │      │  │
-    │  │      ├─ backfill-aged-entries.mjs                     │      │  │
-    │  │      ├─ periodic-entries-from-manifest.mjs            │      │  │
-    │  │      ├─ localize-entries.mjs                          │      │  │
-    │  │      ├─ bulk-publish-cycle.mjs                        │      │  │
-    │  │      ├─ churn-orphans.mjs                             │      │  │
-    │  │      ├─ branch-lifecycle.mjs                          │      │  │
-    │  │      ├─ [6 meter-coverage scripts]                    │      │  │
-    │  │      └─ invite-users.mjs (Playwright)                │      │  │
-    │  │      │                                                 │      │  │
-    │  │      └────────────────────────────────────────────────┘      │  │
-    │  └──────────────────────────────────────────────────────────────┘  │
-    │                                                                     │
-    │  ┌──────────────────────────────────────────────────────────────┐  │
-    │  │              Reporting Layer                                  │  │
-    │  │  ├─ lib/report.mjs (per-step KPI tracking)                   │  │
-    │  │  ├─ lib/progress.mjs (concurrent task tracking)              │  │
-    │  │  └─ RunsDashboard.jsx (visualization)                        │  │
-    │  └──────────────────────────────────────────────────────────────┘  │
-    └────────────────────────────────────────────────────────────────────┘
-          │              │                 │
-          ▼              ▼                 ▼
-    ┌──────────────────────────────┐
-    │  Our Automation (This Repo)   │
-    │  CMA Operations              │
-    │  ✓ Create, Publish, Delete   │
-    │  ✓ Transition Workflows      │
-    │  ✓ Localize, Branch, etc.    │
-    └────────────┬─────────────────┘
-                 │
-         ┌───────┴──────────┐
-         │ Triggers Events  │
-         ▼                  ▼
-    [Kafka Events]   [public/run-history.json]
-    (consumed by      (our automation KPIs)
-     downstream)
-         │
-         │ [Downstream systems handle]
-         ▼
-    analytics-data-sync, Mongo, ES, etc.
+```mermaid
+graph TB
+    subgraph Contentstack["Contentstack CMS Stack"]
+        CMA["CMA API<br/>(REST)"]
+        DEL["Delivery API<br/>(Read-only)"]
+        ORG["Org Admin<br/>Portal"]
+        AUTH["Auth SDK<br/>(Validation)"]
+    end
+    
+    subgraph Framework["Contentstack Metering Automation Framework"]
+        subgraph Scripts["Scripts Layer"]
+            DRIVE["drive-all.mjs<br/>(Orchestrator)"]
+            LIB["lib/cma.mjs<br/>(Helpers +<br/>Self-healing)"]
+            SCRIPTS["19 Meter-Coverage Scripts<br/>Bootstrap, Periodic, Scenarios"]
+        end
+        
+        subgraph Reporting["Reporting Layer"]
+            REPORT["lib/report.mjs<br/>(KPI Tracking)"]
+            PROGRESS["lib/progress.mjs<br/>(Concurrency)"]
+            DASHBOARD["RunsDashboard.jsx<br/>(Visualization)"]
+        end
+    end
+    
+    subgraph Events["Generated Events"]
+        EVTS["✓ entry_created<br/>✓ entry_published<br/>✓ entry_deleted<br/>✓ entry_workflow_*<br/>✓ user_created<br/>+ more"]
+        RUN["public/run-history.json<br/>(Our KPIs)"]
+    end
+    
+    subgraph Downstream["Downstream (Not Our Repo)"]
+        KAFKA["Kafka<br/>(Event consumption)"]
+        MONGO["Mongo<br/>(analytics-data-sync)"]
+        ES["ES<br/>(Materialization)"]
+    end
+    
+    CMA --> DRIVE
+    DEL --> SCRIPTS
+    ORG --> SCRIPTS
+    AUTH --> SCRIPTS
+    
+    DRIVE --> LIB
+    DRIVE --> SCRIPTS
+    SCRIPTS --> REPORT
+    REPORT --> PROGRESS
+    PROGRESS --> DASHBOARD
+    
+    SCRIPTS -->|Triggers| EVTS
+    SCRIPTS -->|Generates| RUN
+    
+    EVTS --> KAFKA
+    KAFKA --> MONGO
+    MONGO --> ES
 ```
 
 ---
