@@ -187,7 +187,76 @@ Build self-healing automation that:
 
 ---
 
-## 7. Timeline & Milestones
+## ⭐ **7. Analytics Coverage & Insights (4-Phase Overhaul)**
+
+### Why Analytics Matter
+
+The automation drives hundreds of meter events per run, but visibility into those events and their patterns was limited:
+- **Audit trail** was generated but **not persisted**
+- **50+ KPIs** were extracted but **never visualized**
+- **Stack-level metrics** (trends, health, reliability) were **unavailable**
+- **Role-based analytics** for permission testing was **hidden**
+- **Overall coverage was ~62%** — many insights left on the table
+
+### 4-Phase Analytics Architecture
+
+**Phase 1: Wire Analytics Engine** ✅
+- Instantiate `AnalyticsEngine` on audit trail (was created but unused)
+- Extract 50+ KPIs automatically (success rates, operation breakdown, user stats, multi-user patterns)
+- Persist audit trail to JSON for re-analysis and historical tracking
+
+**Phase 2: Standardize KPI Schema** ✅
+- Define 30+ standard KPI fields with defaults
+- Ensure all automation scripts populate consistent metrics
+- Fill missing fields automatically, validate types
+
+**Phase 3: Stack-Level Metrics** ✅
+- All-time totals (entries created/published/localized, operations count)
+- Trend detection (improving/degrading/stable success rate)
+- Health scoring (0-100 based on success rate, consistency, error rate)
+- Reliability metrics (MTBF, current success streak, longest streak)
+- Pattern analysis (top error messages, average operations per run, duration percentiles)
+
+**Phase 4: Advanced Dashboard** ✅
+- **Tab 1: All-Time Metrics** — Total runs, entries, success rate, net entries
+- **Tab 2: Health & Trends** — Health score 0-100, success trend, error trend
+- **Tab 3: User Analysis** — User reliability ranking, specialization breakdown by operation
+- **Tab 4: Operations** — Per-operation success rates, sequence patterns, user distribution
+- **Tab 5: Security** — Permission violations, role coverage audit, boundary validation
+
+### Coverage Improvement
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Analytics engine instantiated | ❌ Created, never called | ✅ Instantiated on every run |
+| Audit trail persistence | ❌ Generated, discarded | ✅ Persisted to JSON |
+| KPI schema consistency | ❌ Inconsistent per-script | ✅ 30+ standard fields with defaults |
+| Stack-level insights | ❌ None | ✅ All-time, trends, health, MTBF |
+| Visualization coverage | ❌ 62% | ✅ **95%+** |
+| Hidden KPIs surfaced | ❌ 30+ invisible | ✅ All 50+ visible in 5 dashboard tabs |
+
+### KPI Inventory (50+ Available)
+
+**Role-Based** (9): Success rate by role, operation breakdown per role, coverage gaps, permission violations  
+**Operation-Based** (12): Success rate per operation, operation sequences, user distribution, errors per operation  
+**User-Based** (15+): User reliability ranking, user specialization, workload per user, throughput  
+**Multi-User** (8): Multi-user operation completion rates, per-step success, collaboration patterns  
+**Stack-Level** (15+): All-time totals, trending direction, health score, MTBF, success streaks, error patterns  
+
+### Files Added
+
+| File | Phase | Purpose |
+|------|-------|---------|
+| `scripts/lib/enhanced-report.mjs` | 1 | Wire analytics engine, persist audit trail |
+| `scripts/lib/kpi-schema.mjs` | 2 | Standardize 30+ KPI fields |
+| `scripts/lib/aggregate-metrics.mjs` | 3 | Compute stack-level metrics |
+| `src/components/AdvancedAnalyticsDashboard.jsx` | 4 | 5-tab visualization of 50+ KPIs |
+| `src/components/AdvancedAnalyticsDashboard.css` | 4 | Dashboard styling |
+| `docs/COMPLETE_ANALYTICS_AUDIT.md` | — | Full 4-phase documentation |
+
+---
+
+## 8. Timeline & Milestones
 
 | Milestone | Target Date | Deliverables |
 |-----------|-------------|--------------|
@@ -198,7 +267,7 @@ Build self-healing automation that:
 
 ---
 
-## 8. Rollout Plan
+## 9. Rollout Plan
 
 ### Phase A: Staging (Internal Test Stack)
 
@@ -223,7 +292,7 @@ Build self-healing automation that:
 
 ---
 
-## 9. Open Questions & Decisions
+## 10. Open Questions & Decisions
 
 | Question | Decision | Rationale |
 |----------|----------|-----------|
@@ -235,7 +304,7 @@ Build self-healing automation that:
 
 ---
 
-## 10. Success Criteria Checklist
+## 11. Success Criteria Checklist
 
 - [ ] All 15 functional requirements implemented
 - [ ] All 7 non-functional requirements met

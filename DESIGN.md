@@ -293,6 +293,152 @@ graph LR
 
 ---
 
+## ⭐ **4-Phase Analytics Architecture (New)**
+
+### Local Analytics Pipeline
+
+**The automation now includes a comprehensive 4-phase analytics system that extracts, normalizes, and visualizes 50+ KPIs.**
+
+```mermaid
+graph TD
+    A["📝 Automation Run<br/>Operations + Events"] -->|Capture| B["🔍 Audit Trail<br/>50-100 entries<br/>timestamp, user, role,<br/>operation, success"]
+    
+    B -->|Phase 1| C["⚙️ AnalyticsEngine<br/>Extract 50+ KPIs<br/>instantiate engine<br/>on audit trail"]
+    
+    C -->|Save| D["💾 JSON Outputs<br/>audit-trail.json<br/>analytics.json"]
+    
+    D -->|Phase 2| E["📋 KPI Schema<br/>30+ fields<br/>Normalize + Validate<br/>Fill defaults"]
+    
+    E -->|Phase 3| F["📊 AggregateMetrics<br/>All-time totals<br/>Trends & health<br/>Reliability metrics"]
+    
+    F -->|Phase 4| G["📈 AdvancedDashboard<br/>5 Tabs<br/>50+ KPIs visible<br/>Interactive viz"]
+    
+    B -->|Also feeds| H["👥 RoleBasedUserBatch<br/>Extract role patterns<br/>User specialization<br/>Permission audit"]
+    
+    H -->|Combines with| G
+    
+    G -->|Integrates with| I["🎨 RunsDashboard.jsx<br/>Complete visualization<br/>Calendar heatmap<br/>Day analytics"]
+    
+    style A fill:#e8f4f8
+    style C fill:#fff4e6
+    style E fill:#f0e8f4
+    style F fill:#f4e8e8
+    style G fill:#e8f4e8
+    style H fill:#f4f0e8
+    style I fill:#e0f2f1
+```
+
+### Phase 1: Analytics Engine (Wire + Extract)
+
+```
+Input: Audit Trail (50-100 entries per run)
+├─ timestamp, user_email, role
+├─ operation, success/fail
+└─ multi-user metadata
+
+Processing:
+├─ Instantiate AnalyticsEngine(auditTrail, roles)
+├─ Extract 50+ KPIs automatically
+├─ Persist audit trail to JSON
+└─ Save analytics to separate JSON file
+
+Output: 50+ Extracted KPIs
+├─ Role-based: success_rate_by_role, operations_per_role, coverage
+├─ Operation-based: success_per_op, sequences, errors
+├─ User-based: reliability_ranking, specialization, workload
+├─ Multi-user: collaboration_patterns, completion_rates
+└─ (+ audit trail file for re-analysis)
+```
+
+### Phase 2: KPI Schema (Standardize)
+
+```
+Input: Per-script metrics (inconsistent)
+
+Output: Standardized Schema
+├─ Entry Lifecycle: created, published, deleted, localized
+├─ Trimming: deleted_over_30d, deleted_15_30d, deleted_7_15d
+├─ Localization: already, localize_failed
+├─ Publishing: publish_failed, transitions_skipped
+├─ Branches: branches_created, branch_entries, branch_localized
+├─ Dynamic CTs: dyn_ct_created, dyn_ct_entries
+├─ Workflows: workflow_branch_adds, publish_rules
+├─ Churn: churn_all_wf, churn_branch, churn_restore, cases_ok
+├─ Meter Coverage: edited_post_publish, entries_created, published_by_b
+├─ Users: invited, invite_failed
+└─ Capacity: cap_hit
+
+All fields have:
+├─ Type (number)
+├─ Description
+└─ Default (usually 0, sometimes null)
+```
+
+### Phase 3: Stack-Level Metrics
+
+```
+Input: All runs (historical)
+
+Computation:
+├─ All-Time Totals
+│  ├─ run_count, entries_created, entries_published
+│  ├─ entries_deleted, net_entries
+│  └─ overall_success_rate, total_errors
+│
+├─ Trends (First half vs second half)
+│  ├─ success_rate_trend: improving/degrading/stable
+│  ├─ error_trend: improving/degrading/stable
+│  └─ change percentages
+│
+├─ Health Score (0-100)
+│  ├─ Based on recent 20 runs
+│  ├─ success_rate (60 pts), error_rate (20 pts), consistency (20 pts)
+│  └─ Status: healthy/acceptable/degraded/critical
+│
+├─ Reliability Metrics
+│  ├─ MTBF (mean time between failures)
+│  ├─ Current success streak
+│  ├─ Longest success streak
+│  └─ Failure rate %
+│
+└─ Patterns
+   ├─ Top error messages (frequency count)
+   ├─ Average entries per run
+   └─ Duration percentiles (p50, p95, p99)
+```
+
+### Phase 4: Advanced Dashboard (Visualize)
+
+```
+Tab 1: All-Time Metrics
+├─ Total runs card
+├─ Entries created, published, localized cards
+├─ Overall success rate (color coded)
+└─ Net entries (created - deleted)
+
+Tab 2: Health & Trends
+├─ Health score circle (0-100, color coded)
+├─ Component bars (success rate, error rate, consistency)
+└─ Trend cards (success trend, error trend)
+
+Tab 3: User Analysis
+├─ Top users by reliability ranking
+├─ User specialization cards (strengths, weak areas)
+└─ Workload distribution
+
+Tab 4: Operations
+├─ Operation sequence patterns (top 10)
+├─ Per-operation success rate bars
+├─ User distribution per operation
+
+Tab 5: Security
+├─ Permission validation summary
+├─ Violations detected (if any)
+└─ Role coverage audit (% of allowed ops performed)
+```
+
+---
+
 ## Sequence Diagrams
 
 ### Bootstrap Flow

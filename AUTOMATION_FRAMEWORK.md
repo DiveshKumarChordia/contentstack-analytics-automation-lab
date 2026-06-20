@@ -72,15 +72,30 @@ graph TD
     
     U --> U1["invite-users.mjs<br/>Invite 10 users<br/>+ assign roles"]
     
-    U1 --> R["Reporting & KPIs"]
+    U1 --> A["⭐ Analytics (4 Phases)"]
     
-    R --> R1["lib/report.mjs<br/>Aggregate KPIs"]
-    R1 --> R2["public/run-history.json<br/>Append run data"]
-    R2 --> R3["RunsDashboard.jsx<br/>Visualize trends"]
+    A --> A1["Phase 1:<br/>enhanced-report.mjs<br/>Wire analytics engine"]
+    A1 --> A2["Phase 2:<br/>kpi-schema.mjs<br/>Standardize KPIs"]
+    A2 --> A3["Phase 3:<br/>aggregate-metrics.mjs<br/>Stack-level metrics"]
+    A3 --> A4["Phase 4:<br/>AdvancedAnalyticsDashboard<br/>Visualize 50+ KPIs"]
+    
+    A4 --> R["Reporting & Visualization"]
+    
+    R --> R1["CalendarHeatmap<br/>Day overview"]
+    R --> R2["DayAnalytics<br/>Detailed breakdown"]
+    R --> R3["AdvancedDashboard<br/>5 tabs, 50+ KPIs"]
+    R1 --> R4["RunsDashboard.jsx<br/>Complete analytics coverage"]
+    R2 --> R4
+    R3 --> R4
     
     style E fill:#c8e6c9
     style M fill:#fff9c4
     style U fill:#bbdefb
+    style A fill:#f4e6e8
+    style A1 fill:#fff0f5
+    style A2 fill:#fff0f5
+    style A3 fill:#fff0f5
+    style A4 fill:#fff0f5
     style R fill:#f8bbd0
 ```
 
@@ -102,7 +117,7 @@ graph TD
 
 ### Data Flow (This Repo Only)
 
-**This repository performs CMA operations. Downstream systems handle analytics pipeline.**
+**This repository performs CMA operations AND comprehensive local analytics. Downstream systems handle additional pipeline.**
 
 ```mermaid
 graph LR
@@ -128,6 +143,14 @@ graph LR
         E8["branch_*"]
     end
     
+    subgraph Analytics4Phase["⭐ NEW: 4-PHASE ANALYTICS (Local)"]
+        P1["Phase 1:<br/>Audit Trail<br/>+ KPI Extraction"]
+        P2["Phase 2:<br/>KPI Schema<br/>Standardization"]
+        P3["Phase 3:<br/>Stack-Level<br/>Metrics"]
+        P4["Phase 4:<br/>Dashboard<br/>Visualization"]
+        P1 --> P2 --> P3 --> P4
+    end
+    
     subgraph Downstream["DOWNSTREAM (External Systems)"]
         KAFKA["Kafka<br/>(consumed by)"]
         MONGO["Mongo<br/>(analytics-data-sync)"]
@@ -151,6 +174,15 @@ graph LR
     E6 --> KAFKA
     E7 --> KAFKA
     E8 --> KAFKA
+    
+    E1 -.->|Feed Audit Trail| P1
+    E2 -.->|Feed Audit Trail| P1
+    E3 -.->|Feed Audit Trail| P1
+    E4 -.->|Feed Audit Trail| P1
+    E5 -.->|Feed Audit Trail| P1
+    E6 -.->|Feed Audit Trail| P1
+    E7 -.->|Feed Audit Trail| P1
+    E8 -.->|Feed Audit Trail| P1
     
     KAFKA --> MONGO
     MONGO --> EXT
