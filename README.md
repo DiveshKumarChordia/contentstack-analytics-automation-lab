@@ -334,10 +334,13 @@ graph TB
             FE_DASH["📊 RunsDashboard<br/>KPI Tracking<br/>Trends + Errors"]
         end
         
-        subgraph FE_COMPONENTS["⚙️ Components"]
+        subgraph FE_COMPONENTS["⚙️ Components [7 Total]"]
             FE_LAYOUT["Layout.jsx"]
             FE_DIGEST["DigestItem.jsx"]
             FE_HERO["HeroCanvas.jsx<br/>Three.js 3D"]
+            FE_HEATMAP["CalendarHeatmap ⭐NEW<br/>Day Overview"]
+            FE_DAYANALYTICS["DayAnalytics ⭐NEW<br/>Detailed Breakdown"]
+            FE_ADV_DASH["AdvancedDashboard ⭐NEW<br/>5 Tabs, 50+ KPIs"]
         end
         
         subgraph FE_LIBS["📚 Libraries"]
@@ -393,17 +396,36 @@ graph TB
             AUTO_M6["Orphans"]
         end
         
-        subgraph AUTO_USERS["👤 Users [1]"]
+        subgraph AUTO_USERS["👤 Users [4] ⭐NEW"]
             AUTO_U1["Invite 10/run"]
+            AUTO_UM1["Random Users<br/>Gmail Plus"]
+            AUTO_UM2["Assigned Ops<br/>Human Dates"]
+            AUTO_UM3["Role-Based<br/>5 Test Roles"]
         end
         
-        subgraph AUTO_LIBS["📦 Libraries"]
-            AUTO_LIB1["CMA.mjs"]
-            AUTO_LIB2["TOTP"]
-            AUTO_LIB3["Placeholders"]
-            AUTO_LIB4["Patterns"]
-            AUTO_LIB5["Schema Gen"]
-            AUTO_LIB6["Progress"]
+        subgraph AUTO_LIBS["📦 Libraries [19 Total]"]
+            subgraph LIB_CORE["Core [7]"]
+                AUTO_LIB1["CMA.mjs"]
+                AUTO_LIB2["TOTP"]
+                AUTO_LIB3["Placeholders"]
+                AUTO_LIB4["Patterns"]
+                AUTO_LIB5["Schema Gen"]
+                AUTO_LIB6["Logger ⭐NEW"]
+                AUTO_LIB7["Progress"]
+            end
+            subgraph LIB_ANALYTICS["Analytics [4] ⭐NEW"]
+                AUTO_LIB_A1["Analytics Engine<br/>Extract 50+ KPIs"]
+                AUTO_LIB_A2["KPI Schema<br/>30+ Fields"]
+                AUTO_LIB_A3["Aggregate Metrics<br/>Trends+Health"]
+                AUTO_LIB_A4["Enhanced Report<br/>Audit Trail"]
+            end
+            subgraph LIB_USERS["User Mgmt [5] ⭐NEW"]
+                AUTO_LIB_U1["Gmail Utils"]
+                AUTO_LIB_U2["User Factory v2"]
+                AUTO_LIB_U3["Role-Based"]
+                AUTO_LIB_U4["Assignments"]
+                AUTO_LIB_U5["Org Perms"]
+            end
         end
     end
     
@@ -423,17 +445,37 @@ graph TB
         end
     end
     
-    subgraph MONITOR["📊 MONITORING<br/>Live Tracking"]
-        subgraph MON_KPI["📈 KPIs [15+]"]
-            MON_K1["Created"]
-            MON_K2["Published"]
-            MON_K3["Deleted"]
+    subgraph MONITOR["📊 MONITORING & ANALYTICS<br/>50+ KPIs, Real-Time"]
+        subgraph MON_KPI["📈 KPIs [50+] ⭐NEW"]
+            MON_K1["Role-Based [9]"]
+            MON_K2["Operation [12]"]
+            MON_K3["User-Based [15+]"]
+            MON_K4["Multi-User [8]"]
+            MON_K5["Stack-Level [15+]"]
         end
         
-        subgraph MON_DASH["🎯 Dashboard"]
-            MON_D1["Live @ /runs"]
-            MON_D2["Trends"]
-            MON_D3["Errors"]
+        subgraph MON_COMP["🎨 Components ⭐NEW"]
+            MON_C1["Calendar Heatmap"]
+            MON_C2["Day Analytics"]
+            MON_C3["Advanced Dashboard"]
+        end
+        
+        subgraph MON_DASH["📊 5-Tab Dashboard"]
+            MON_D1["All-Time Metrics"]
+            MON_D2["Health & Trends"]
+            MON_D3["User Analysis"]
+            MON_D4["Operations"]
+            MON_D5["Security Audit"]
+        end
+    end
+    
+    subgraph ANALYTICS["⭐ 4-PHASE ANALYTICS<br/>NEW: 50+ KPIs<br/>Real-Time Processing"]
+        subgraph PHASE["4 Phases"]
+            PH1["Phase 1:<br/>Analytics Engine<br/>Extract KPIs"]
+            PH2["Phase 2:<br/>KPI Schema<br/>Normalize"]
+            PH3["Phase 3:<br/>Stack Metrics<br/>Trends+Health"]
+            PH4["Phase 4:<br/>Dashboard<br/>Visualize"]
+            PH1 --> PH2 --> PH3 --> PH4
         end
     end
     
@@ -453,6 +495,7 @@ graph TB
     ROOT -->|Tests| PERF
     ROOT -->|Orchestrates| AUTO
     ROOT -->|Enables| ADVANCED
+    ROOT -->|Powers| ANALYTICS
     ROOT -->|Tracks| MONITOR
     ROOT -->|Provides| HEALING
     ROOT -->|Runs via| CICD
@@ -516,22 +559,31 @@ graph TB
     style MON_KPI fill:#1a1f26,stroke:#dd33ff,stroke-width:2px,color:#dd33ff
     style MON_DASH fill:#1a1f26,stroke:#dd33ff,stroke-width:2px,color:#dd33ff
     
+    style ANALYTICS fill:#0f1419,stroke:#00b300,stroke-width:3px,color:#00b300
+    style PHASE fill:#1a1f26,stroke:#39ff14,stroke-width:2px,color:#39ff14
+    style PH1 fill:#1a1f26,stroke:#ff8c00,stroke-width:2px,color:#ffa500
+    style PH2 fill:#1a1f26,stroke:#9933ff,stroke-width:2px,color:#dd33ff
+    style PH3 fill:#1a1f26,stroke:#ff006e,stroke-width:2px,color:#ff1493
+    style PH4 fill:#1a1f26,stroke:#00b300,stroke-width:2px,color:#39ff14
+    
     style HEALING fill:#0f1419,stroke:#00ffff,stroke-width:3px,color:#00ffff
     
     style CICD fill:#0f1419,stroke:#ff1493,stroke-width:3px,color:#ff1493
 ```
 
-### Feature Breakdown by Category
+### Feature Breakdown by Category (Complete Inventory)
 
 | Category | What's Included | Count |
 |----------|-----------------|-------|
 | **Frontend Pages** | HomePage, EntryPage, RunsDashboard | 3 |
-| **React Components** | Layout, DigestItem, HeroCanvas | 3 |
-| **Frontend Libraries** | Delivery API, Formatting, Events tracking | 4 |
-| **Automation Scripts** | Bootstrap, Periodic, Meter-coverage, Utilities | 24+ |
-| **Advanced Features** | Multi-user, Auth paths, Placeholders, Locale experiments, Workflow patterns | 5 |
-| **Core Libraries** | CMA wrapper, TOTP, Placeholders, Patterns, Schema gen, Progress | 6 |
-| **KPI Metrics** | Entries created/published/deleted, users, success rate, trends | 15+ |
+| **React Components** | Layout, DigestItem, HeroCanvas, CalendarHeatmap, DayAnalytics, App, main | 7 |
+| **Frontend Libraries** | Delivery API, Formatting, Events tracking, Excerpt, Markdown | 5 |
+| **Automation Scripts** | Orchestration, Bootstrap (4), Periodic (8), Meter-coverage (6), Multi-user (4), Utilities (6) | **29** |
+| **Advanced Features** | Multi-user modes, Auth paths, Placeholders, Locale experiments, Workflow patterns, 4-phase analytics | **8** |
+| **Core Libraries** | CMA wrapper, TOTP, Placeholders, Patterns, Schema gen, Progress, Logging | **7** |
+| **Analytics Libraries** | AnalyticsEngine, KPI Schema, Aggregate Metrics, Enhanced Report | **4** |
+| **User Management Libraries** | User factory v1/v2, Role-based factory, Gmail utils, Assignments, Organization | **5** |
+| **KPI Metrics** | Entries created/published/deleted/localized, users, success rate, trends, health, MTBF | **50+** |
 | **Authentication Methods** | Authtoken, Email+Pwd, TOTP/2FA, TFA token | 4 |
 | **Placeholder Types** | Timestamp, UUID, Random int, Random choice, Entry UID, Taxonomy | 6 |
 | **Workflow Patterns** | Linear, Skip, Rework, PartialStall, FirstOnly | 5 |
@@ -539,28 +591,68 @@ graph TB
 | **Content Types** | Configurable, Multi-branch support, Field validation | N/A |
 | **Branches** | 30-branch lineage, No teardown, Full lifecycle | 30 |
 | **Meter Dimensions** | User, branch, locale, workflow, stage, lifecycle, orphan | 7+ |
+| **Multi-User Modes** | Random users (Gmail plus), Assigned operations, Role-based (5 test roles) | 3 |
+| **Test Roles** | Owner, Admin, Editor, Contributor, Viewer (test simulation only) | 5 |
 | **Self-Healing** | Auto-create locales, workflows, roles | 3 |
 | **Performance Testing** | Warmup, hitting, concurrent, cache tracking | 3 modes |
-| **Monitoring** | Dashboard, KPI tracking, Error logging, Report generation | Continuous |
+| **Monitoring** | Dashboard (5 tabs), KPI tracking, Calendar heatmap, Day analytics, Error logging | **5 features** |
+| **Logging System** | DEBUG, INFO, WARN, ERROR levels, Structured logging, File output | Full |
 | **CI/CD** | GitHub Actions, 5-min scheduling, Secrets management | Full |
 
-### What Gets Tested (Comprehensive Coverage)
+### What Gets Tested (Comprehensive Coverage - 29 Scripts, 50+ KPIs)
 
+**Entry & Content Operations:**
 ✅ **Entry Lifecycle** — Create, localize, publish, unpublish, update, delete, restore  
-✅ **Workflow Transitions** — 5 patterns with weighted distribution  
-✅ **Multi-User Scenarios** — Round-robin across multiple users with distinct user_uid  
-✅ **Multi-Branch Lineage** — 30-branch tree with cascading content  
-✅ **Locale Fallback Chains** — 5 locales with fallback validation  
-✅ **Aging & Retention** — Tiered retention, aged entry restoration  
-✅ **Orphaning Scenarios** — Branch/locale deletion events  
-✅ **Meter Dimensions** — All CMA operation dimensions covered  
-✅ **Authentication Paths** — Authtoken, email+pwd, TOTP, TFA  
-✅ **Advanced Features** — Placeholders, locale experiments, workflow patterns  
-✅ **Performance Testing** — Cache warming, concurrent requests, response times  
-✅ **Self-Healing** — Auto-creation of missing prerequisites  
-✅ **Multi-Locale Support** — Realistic fallback and inheritance patterns  
-✅ **Event Generation** — All meter events for analytics validation  
-✅ **Continuous Monitoring** — Dashboard, KPIs, trend tracking
+✅ **Workflow Transitions** — 5 patterns (Linear, Skip, Rework, PartialStall, FirstOnly) with weighted distribution  
+✅ **Multi-Branch Lineage** — 30-branch tree with cascading content, no teardown persistence  
+✅ **Locale Fallback Chains** — 5 locales + master with fallback validation  
+✅ **Aging & Retention** — Tiered retention (>30d=5k, 15-30d=10k, 7-15d=20k), aged entry restoration  
+✅ **Orphaning Scenarios** — Branch/locale deletion events, orphan cleanup  
+
+**Multi-User & Role-Based Testing:**
+✅ **Random Users (Gmail Plus)** — Unlimited unique users from single inbox (divesh.k+timestamp@...)  
+✅ **Assigned Operations** — Pre-assigned ops per user with human-readable dates (divesh.k+run-2025-dec-08-0230pm-ops-...)  
+✅ **Role-Based Testing** — 5 test simulation roles (Owner, Admin, Editor, Contributor, Viewer) with permission boundaries  
+✅ **Multi-User Operations** — Collaborative workflows (review-and-publish, owner-approval-publish, bulk-localize-publish, etc)  
+✅ **Multi-Actor Create-Publish** — Different creators/publishers drive user_uid dimension  
+
+**Meter Coverage & Analytics:**
+✅ **Meter Dimensions** — All CMA operation dimensions covered (user, branch, locale, workflow, stage, lifecycle, orphan)  
+✅ **6 Meter-Coverage Scenarios** — Edit-after-publish, Permanent-deletes, Aged-stalls, No-workflow-ct, Multi-actor, Branch-locale-deletion  
+✅ **50+ KPI Extraction** — Role-based (9), Operation-based (12), User-based (15+), Multi-user (8), Stack-level (15+)  
+✅ **4-Phase Analytics Pipeline** — Phase 1 (extract), Phase 2 (normalize), Phase 3 (aggregate), Phase 4 (visualize)  
+✅ **Stack-Level Metrics** — All-time totals, trends, health scores (0-100), MTBF, success streaks  
+
+**Authentication & Authorization:**
+✅ **Authentication Paths** — Authtoken, email+password, TOTP/2FA, TFA token  
+✅ **Organization Permissions** — Org-level user management, role assignment, permission boundaries  
+✅ **Stack-Level RBAC** — CMS role assignment (Developer, Content Manager, Viewer)  
+✅ **Permission Validation** — Audit trail tracking permission violations  
+
+**Advanced Features & Experimentation:**
+✅ **Entry Placeholders** — __TIMESTAMP__, __UUID__, __RANDOM_INT__, __RANDOM_CHOICE__, __ENTRY_UID__, __TAX_TERMS__  
+✅ **Locale Experiments** — Destructive testing of fallback chains, orphaning scenarios  
+✅ **Smart Randomization** — 6 strategies (pure random, weighted, balanced, admin-heavy, viewer-heavy, operation-specific)  
+✅ **Self-Healing** — Auto-create locales, workflows, roles on-demand  
+
+**Performance & Monitoring:**
+✅ **Performance Testing** — Cache warming, URL hitting, 100x concurrent Delivery API requests  
+✅ **Continuous Monitoring** — Calendar heatmap (day overview), Day analytics (detailed breakdown), 5-tab dashboard (50+ KPIs)  
+✅ **Dashboard Analytics** — All-Time Metrics, Health & Trends, User Analysis, Operations, Security audit  
+✅ **Audit Trails** — 50-100 entries per run, persisted to JSON, re-analyzable  
+✅ **Structured Logging** — DEBUG/INFO/WARN/ERROR levels, categorized by module  
+
+**Event Generation & Validation:**
+✅ **Event Generation** — 250k+ meter events per run (entry_created, entry_published, entry_deleted, entry_workflow_*, user_created, branch_*, etc)  
+✅ **Kafka Integration** — All events flow through Kafka for downstream analytics  
+✅ **Real-Time Analytics** — Local 4-phase pipeline processes audit trail immediately  
+✅ **Nightly Analytics** — Mongo snapshot sync + Elasticsearch indexing for CMS dashboards  
+
+**Continuous Automation:**
+✅ **CI/CD Integration** — GitHub Actions every 5 minutes, environment secrets, auto-reporting  
+✅ **Self-Contained Runs** — No manual setup required, all prerequisites auto-created  
+✅ **Run-History Persistence** — All KPIs appended to run-history.json for historical analysis  
+✅ **Trend Detection** — Improving/degrading/stable trends across all metrics
 
 ---
 
