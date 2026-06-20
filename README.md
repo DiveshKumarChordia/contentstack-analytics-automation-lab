@@ -382,14 +382,67 @@ jobs:
 
 ## Core Architecture
 
-### System Flow
+### System Flow & Architecture
+
+#### 1. High-Level System Architecture
 
 ```mermaid
 graph TB
     subgraph Repo["THIS REPO"]
-        FE["Frontend App<br/>(Vite + React)"]
-        PERF["Performance Testing<br/>(URL Hitting)"]
-        AUTO["Automation Framework<br/>(24+ scripts)"]
+        subgraph FrontEnd["Frontend Layer"]
+            FE["Frontend App<br/>(Vite + React)"]
+            PERF["Performance Testing<br/>(URL Hitting)"]
+        end
+        
+        subgraph AutoMation["Automation Framework<br/>(24+ Scripts)"]
+            subgraph Bootstrap["Bootstrap Phase (1x setup)"]
+                BS1["bootstrap-from-manifest"]
+                BS2["seed-locales-branches"]
+                BS3["seed-workflows"]
+                BS4["seed-publishing-rules"]
+            end
+            
+            subgraph Periodic["Periodic Phase (5min)"]
+                P1["delete-old-entries<br/>(tiered retention)"]
+                P2["backfill-aged-entries<br/>(restore from trash)"]
+                P3["periodic-entries-from-manifest<br/>(10k entries)"]
+                P4["localize-entries<br/>(5 locales)"]
+                P5["bulk-publish-cycle<br/>(60% pub, 15% unpub)"]
+                P6["seed-workflows<br/>(5 patterns)"]
+                P7["churn-orphans<br/>(branch lifecycle)"]
+                P8["branch-lifecycle<br/>(30-branch lineage)"]
+            end
+            
+            subgraph Coverage["Meter-Coverage Phase (6 scenarios)"]
+                C1["edit-after-publish"]
+                C2["permanent-deletes"]
+                C3["aged-stalls"]
+                C4["no-workflow-ct"]
+                C5["multi-actor-create-publish"]
+                C6["branch-locale-deletion"]
+            end
+            
+            subgraph UserMgmt["User Management"]
+                U1["invite-users<br/>(10 new/run)"]
+            end
+            
+            subgraph Utilities["Utilities & Standalone"]
+                U2["create-and-publish-entry"]
+                U3["ensure-stack-user-role"]
+                U4["locale-experiments"]
+                U5["warm-launch-urls"]
+                ORCH["drive-all.mjs<br/>(Orchestrator)"]
+            end
+            
+            subgraph Libraries["Libraries & Utils"]
+                LIB1["cma.mjs<br/>(CMA + self-heal)"]
+                LIB2["totp.mjs"]
+                LIB3["entry-placeholders"]
+                LIB4["workflow-patterns"]
+                LIB5["schema-from-fields"]
+                LIB6["progress + report"]
+            end
+        end
     end
     
     subgraph Stack["Contentstack Stack"]
@@ -399,26 +452,288 @@ graph TB
     end
     
     subgraph Events["Generated Events"]
-        KAFKA["Kafka<br/>entry_created,<br/>entry_published,<br/>entry_workflow_*"]
+        KAFKA["Kafka<br/>entry_created, entry_published,<br/>entry_deleted, entry_workflow_*<br/>org_user_invited, org_user_role_*"]
     end
     
-    subgraph Downstream["Downstream (External)"]
-        MONGO["Mongo<br/>analytics-data-sync"]
-        ES["Elasticsearch<br/>METRIC_DATA_INDEX"]
-        DASH["Dashboards<br/>CMS KPIs"]
+    subgraph Downstream["Downstream Systems<br/>(External)"]
+        MONGO["Mongo<br/>(analytics-data-sync)"]
+        ES["Elasticsearch<br/>(METRIC_DATA_INDEX)"]
+        DASH["CMS Dashboards<br/>(Content Lifecycle,<br/>Workflow Health,<br/>Team Adoption)"]
     end
     
-    FE -->|Reads| DELAPI
-    PERF -->|Concurrent GETs| DELAPI
-    AUTO -->|Creates/Updates| CMAAPI
-    AUTO -->|Invites| ORGADMIN
+    FE -->|Reads published| DELAPI
+    PERF -->|100x concurrent GETs| DELAPI
+    
+    ORCH -->|Orchestrates| Bootstrap
+    ORCH -->|Orchestrates| Periodic
+    ORCH -->|Orchestrates| Coverage
+    ORCH -->|Orchestrates| UserMgmt
+    
+    Bootstrap -->|Uses| Libraries
+    Periodic -->|Uses| Libraries
+    Coverage -->|Uses| Libraries
+    UserMgmt -->|Uses| Libraries
+    
+    Bootstrap -->|Creates/Queries| CMAAPI
+    Periodic -->|Creates/Updates/Deletes| CMAAPI
+    Coverage -->|Drives meter scenarios| CMAAPI
+    UserMgmt -->|Invites| ORGADMIN
     
     CMAAPI -.->|Triggers| KAFKA
     ORGADMIN -.->|Triggers| KAFKA
     
-    KAFKA --> MONGO
-    MONGO --> ES
-    ES --> DASH
+    KAFKA -->|Events flow| MONGO
+    MONGO -->|Snapshot scan| ES
+    ES -->|Powers| DASH
+    
+    style Bootstrap fill:#e1f5ff
+    style Periodic fill:#e1f5ff
+    style Coverage fill:#fff3e0
+    style UserMgmt fill:#f3e5f5
+    style Libraries fill:#e8f5e9
+    style FrontEnd fill:#fce4ec
+```
+
+#### 2. Complete Automation Workflow & Dependencies
+
+```mermaid
+graph LR
+    CI["CI Trigger<br/>(every 5 min)"]
+    
+    ORCH["drive-all.mjs<br/>Orchestrator"]
+    
+    subgraph Init["BOOTSTRAP (one-time)"]
+        B1["1. bootstrap-from-manifest<br/>(create CTs, fields)"] --> B2["2. seed-locales-branches<br/>(create locales + 30-branch lineage)"]
+        B2 --> B3["3. seed-workflows<br/>(create 5 workflow pattern templates)"]
+        B3 --> B4["4. seed-publishing-rules<br/>(setup publishing rules)"]
+    end
+    
+    subgraph Maint["MAINTENANCE (every run)"]
+        M0["0. Ensure CMS roles<br/>(auto-assign to users)"]
+        M0 --> M1["1. delete-old-entries<br/>(tiered retention: >30d=5k, 15-30d=10k, 7-15d=20k)"]
+        M1 --> M2["2. backfill-aged-entries<br/>(restore from trash if below target)"]
+        M2 --> M3["3. periodic-entries-from-manifest<br/>(create 10k entries × 5 CTs)"]
+    end
+    
+    subgraph Lifecycle["LIFECYCLE (every run)"]
+        L1["4. localize-entries<br/>(5 non-master locales w/ fallback)"] --> L2["5. bulk-publish-cycle<br/>(60% pub, 15% unpub)"]
+        L2 --> L3["6. branch-lifecycle<br/>(30-branch lineage, 10x entry churn)"]
+        L3 --> L4["7. churn-orphans<br/>(orphan cleanup %)"]
+        L4 --> L5["8. seed-workflows with transitions<br/>(Linear, Skip, Rework, PartialStall, FirstOnly)"]
+    end
+    
+    subgraph Meter["METER-COVERAGE (6 scenarios, sequential)"]
+        MC1["• edit-after-publish<br/>(entry_published → entry_updated)"] --> MC2["• permanent-deletes<br/>(entry_deleted events)"]
+        MC2 --> MC3["• aged-stalls<br/>(entries in-progress > 30d)"]
+        MC3 --> MC4["• no-workflow-ct<br/>(entries on CTs without workflow)"]
+        MC4 --> MC5["• multi-actor-create-publish<br/>(round-robin token users)"]
+        MC5 --> MC6["• branch-locale-deletion<br/>(orphan events via branch/locale delete)"]
+    end
+    
+    subgraph Users["USER-MANAGEMENT"]
+        UM["invite-users (10 per run)<br/>+ CMS role assignment"]
+    end
+    
+    subgraph Output["OUTPUT & REPORTING"]
+        HIST["run-history.json<br/>(append KPIs)"]
+        DASH["RunsDashboard at /runs<br/>(show trends, errors)"]
+    end
+    
+    CI --> ORCH
+    ORCH -->|Run once| Init
+    ORCH -->|Run every cycle| Maint
+    Maint --> Lifecycle
+    Lifecycle --> Meter
+    Meter --> Users
+    Users --> HIST
+    HIST --> DASH
+    
+    style CI fill:#ffecb3
+    style Init fill:#e1f5ff
+    style Maint fill:#e1f5ff
+    style Lifecycle fill:#fff3e0
+    style Meter fill:#f3e5f5
+    style Users fill:#e8f5e9
+    style Output fill:#fff9c4
+```
+
+#### 3. Entry Placeholder Resolution Flow (LLD)
+
+```mermaid
+graph TD
+    START["Entry from manifest<br/>with placeholder fields"] --> PARSE["Parse field values<br/>for placeholders<br/>(__TIMESTAMP__, __UUID__,<br/>__RANDOM_INT__, __RANDOM_CHOICE__,<br/>__ENTRY_UID__, __TAX_TERMS__)"]
+    
+    PARSE --> CHECK{"Placeholder<br/>found?"}
+    CHECK -->|__TIMESTAMP__| TS["Resolve to ISO<br/>current timestamp"]
+    CHECK -->|__UUID__| UUID["Resolve to<br/>uuidv4()"]
+    CHECK -->|__RANDOM_INT__| RINT["Resolve to Math.random()<br/>within bounds"]
+    CHECK -->|__RANDOM_CHOICE__| RCHOICE["Resolve to<br/>choice from array"]
+    CHECK -->|__ENTRY_UID__| EUID["Resolve to<br/>entry.uid<br/>(for references)"]
+    CHECK -->|__TAX_TERMS__| TAX["Resolve to<br/>taxonomy terms<br/>from config"]
+    CHECK -->|No placeholder| NOOP["Use value as-is"]
+    
+    TS --> BUILD["Build final field<br/>with resolved value"]
+    UUID --> BUILD
+    RINT --> BUILD
+    RCHOICE --> BUILD
+    EUID --> BUILD
+    TAX --> BUILD
+    NOOP --> BUILD
+    
+    BUILD --> ENTRY["Create/update entry<br/>with resolved fields"]
+    ENTRY --> TRIGGER["Trigger entry_created<br/>or entry_updated<br/>event"]
+    
+    style START fill:#fff3e0
+    style PARSE fill:#e1f5ff
+    style CHECK fill:#ffe0b2
+    style TS fill:#c8e6c9
+    style UUID fill:#c8e6c9
+    style RINT fill:#c8e6c9
+    style RCHOICE fill:#c8e6c9
+    style EUID fill:#c8e6c9
+    style TAX fill:#c8e6c9
+    style NOOP fill:#c8e6c9
+    style BUILD fill:#f8bbd0
+    style ENTRY fill:#ffccbc
+    style TRIGGER fill:#fff9c4
+```
+
+#### 4. Frontend Integration & React Component Architecture
+
+```mermaid
+graph TB
+    subgraph Frontend["Frontend (Vite + React)<br/>Port 5173"]
+        Router["React Router<br/>Routes"]
+        
+        subgraph Pages["Pages"]
+            HomePage["HomePage.jsx<br/>Paginated entry list,<br/>filters, digest grouping"]
+            EntryPage["EntryPage.jsx<br/>Single entry detail,<br/>field rendering"]
+            RunsDash["RunsDashboard.jsx<br/>Automation KPIs,<br/>trends, errors"]
+        end
+        
+        subgraph Components["Components"]
+            Layout["Layout.jsx<br/>(shell, nav)"]
+            Digest["DigestItem.jsx<br/>(changelog grouping)"]
+            Hero["HeroCanvas.jsx<br/>(Three.js 3D)"]
+        end
+        
+        subgraph Libs["Libraries"]
+            DeliveryLib["contentstackDelivery.js<br/>(Delivery API client)"]
+            FormatLib["entryFormat.js<br/>(field formatting)"]
+            ExcerptLib["entryExcerpt.js<br/>(entry summarization)"]
+            EventsLib["siteEvents.js<br/>(analytics tracking)"]
+        end
+    end
+    
+    subgraph External["External APIs"]
+        DeliveryAPI["Contentstack<br/>Delivery API<br/>(published entries)"]
+        StaticFiles["Static Files<br/>(run-history.json,<br/>warmup-report.json)"]
+    end
+    
+    Router --> HomePage
+    Router --> EntryPage
+    Router --> RunsDash
+    Router --> Layout
+    
+    HomePage --> Digest
+    HomePage --> Layout
+    EntryPage --> Layout
+    RunsDash --> Layout
+    
+    HomePage --> DeliveryLib
+    EntryPage --> DeliveryLib
+    Digest --> FormatLib
+    HomePage --> ExcerptLib
+    EntryPage --> ExcerptLib
+    
+    HomePage --> EventsLib
+    EntryPage --> EventsLib
+    RunsDash --> EventsLib
+    
+    DeliveryLib -->|Concurrent GETs<br/>100x+ calls| DeliveryAPI
+    RunsDash -->|Reads JSON| StaticFiles
+    
+    Pages --> Hero
+    
+    style Pages fill:#fce4ec
+    style Components fill:#f3e5f5
+    style Libs fill:#e8f5e9
+    style External fill:#e0e0e0
+```
+
+#### 5. Complete Data Flow: CMA Operation → Events → Analytics Dashboard
+
+```mermaid
+graph LR
+    subgraph Origins["CMA Operations<br/>(Automation generates)"]
+        O1["📝 entry_created<br/>(10k/run)"]
+        O2["🌍 entry_localized<br/>(5 locales)"]
+        O3["📤 entry_published<br/>(60% of entries)"]
+        O4["🔄 entry_workflow_*<br/>(5 patterns)"]
+        O5["🗑️ entry_deleted<br/>(aged entries)"]
+        O6["👤 org_user_invited<br/>(10 new/run)"]
+    end
+    
+    subgraph Transport["Kafka Transport"]
+        KAFKA["Kafka Cluster<br/>(Topic per operation)"]
+    end
+    
+    subgraph Snapshot["Mongo Snapshot<br/>(analytics-data-sync)"]
+        MONGO["Mongo collections<br/>cms-content-lifecycle,<br/>cms-workflow-health,<br/>cms-team-adoption,<br/>organization"]
+    end
+    
+    subgraph Index["Elasticsearch<br/>METRIC_DATA_INDEX"]
+        ES1["Dimension: user_uid<br/>(multi-user tracking)"]
+        ES2["Dimension: branch<br/>(30-branch lineage)"]
+        ES3["Dimension: locale<br/>(5 locales + master)"]
+        ES4["Dimension: workflow_stage<br/>(5 patterns)"]
+        ES5["Metric: entries_created"]
+        ES6["Metric: entries_published"]
+        ES7["Metric: entries_in_progress"]
+        ES8["Metric: entries_stalled"]
+    end
+    
+    subgraph Dashboard["Contentstack CMS Dashboards"]
+        D1["📊 Content Lifecycle<br/>(entries_created, published, deleted)"]
+        D2["⚙️ Workflow Health<br/>(in-progress, stalled_by_stage,<br/>transition patterns)"]
+        D3["👥 Team Adoption<br/>(entries_per_author,<br/>user_activity_ratio)"]
+    end
+    
+    O1 -->|triggered| KAFKA
+    O2 -->|triggered| KAFKA
+    O3 -->|triggered| KAFKA
+    O4 -->|triggered| KAFKA
+    O5 -->|triggered| KAFKA
+    O6 -->|triggered| KAFKA
+    
+    KAFKA -->|consume| MONGO
+    MONGO -->|nightly cron| ES1
+    MONGO -->|nightly cron| ES2
+    MONGO -->|nightly cron| ES3
+    MONGO -->|nightly cron| ES4
+    MONGO -->|nightly cron| ES5
+    MONGO -->|nightly cron| ES6
+    MONGO -->|nightly cron| ES7
+    MONGO -->|nightly cron| ES8
+    
+    ES1 --> D1
+    ES5 --> D1
+    ES6 --> D1
+    ES7 --> D1
+    
+    ES2 --> D2
+    ES3 --> D2
+    ES4 --> D2
+    ES8 --> D2
+    
+    ES2 --> D3
+    ES1 --> D3
+    
+    style Origins fill:#fff3e0
+    style Transport fill:#e0e0e0
+    style Snapshot fill:#b3e5fc
+    style Index fill:#c8e6c9
+    style Dashboard fill:#f8bbd0
 ```
 
 ---
