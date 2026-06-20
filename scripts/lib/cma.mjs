@@ -110,6 +110,17 @@ export async function createContentType(base, headers, { uid, title, schema }) {
   return { ok: res.ok, status: res.status, body }
 }
 
+/** List all content types on the stack. */
+export async function listContentTypes(base, headers, { limit = 100, includeCount = true } = {}) {
+  const params = new URLSearchParams()
+  if (limit != null) params.set('limit', String(limit))
+  if (includeCount) params.set('include_count', 'true')
+  const url = `${base}/v3/content_types?${params.toString()}`
+  const res = await fetch(url, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
 /** DELETE /v3/content_types/{uid}. force=true also removes its entries. */
 export async function deleteContentType(base, headers, uid, { force = true } = {}) {
   const q = force ? '?force=true' : ''
@@ -126,6 +137,19 @@ export async function createEntry(base, headers, contentTypeUid, entryFields, lo
   const url = `${base}/v3/content_types/${contentTypeUid}/entries${q}`
   const res = await fetch(url, {
     method: 'POST',
+    headers,
+    body: JSON.stringify({ entry: entryFields }),
+  })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/** Update (save) an entry without publishing. Used for entries_in_progress meter. */
+export async function updateEntry(base, headers, contentTypeUid, entryUid, entryFields, locale) {
+  const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
+  const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}${q}`
+  const res = await fetch(url, {
+    method: 'PUT',
     headers,
     body: JSON.stringify({ entry: entryFields }),
   })
