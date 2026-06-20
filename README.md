@@ -77,45 +77,152 @@ Together they create a **production-grade testing environment** running continuo
 
 **The Ultimate Content Lifecycle Testing & Automation Laboratory**
 
-### 🎬 System Flow Animation
+### 🎬 System Flow Animation (Auto-Playing)
 
 <div align="center">
 
-```
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                    🚀 CONTENTSTACK ANALYTICS LAB FLOW 🚀                      ║
-╠═══════════════════════════════════════════════════════════════════════════════╣
-║                                                                               ║
-║   📝 CMA OPERATIONS                  🌊 DATA PIPELINE                         ║
-║   ├─ entry_created      ───────┐                                             ║
-║   ├─ entry_published    ─┐     │                    📊 ANALYTICS              ║
-║   ├─ entry_workflow_*   ─┼──→ 📨 KAFKA ──────────→ 🗄️ MONGO → 🔍 ELASTICSEARCH║
-║   ├─ entry_deleted      ─┤     │                  │            │             ║
-║   ├─ org_user_invited   ─┘     │                  │            ├─→ 📈 KPI Dashboards
-║   └─ (10k+/run)                │                  │            │   - Content Lifecycle
-║                                │                  └─→ ✅ Daily │   - Workflow Health
-║   👥 USERS & LOCALES           │                      Snapshot  └─→ 👥 Team Adoption
-║   ├─ 10 new users/run          │                      Cron
-║   ├─ 5 locales per entry       │
-║   ├─ 30-branch lineage ────────┘
-║   └─ Multi-user simulation
-║
-║   ⚡ FRONTEND                    🎯 MONITORING
-║   ├─ React App @ 5173            ├─ Real-time Dashboard @ /runs
-║   ├─ 100x concurrent GETs        ├─ KPI Tracking (15+ metrics)
-║   ├─ Delivery API reads          ├─ Error Logging
-║   └─ 3D Hero Visualization       └─ Trend Analysis
-║
-║   🔄 SELF-HEALING                  🏗️ INFRASTRUCTURE
-║   ├─ Auto-create locales         ├─ GitHub Actions (every 5 min)
-║   ├─ Auto-create workflows       ├─ Node 24+ runtime
-║   └─ Auto-assign roles           └─ CI/CD secrets management
-║
-╚═══════════════════════════════════════════════════════════════════════════════╝
-
-    🔌 24+ AUTOMATION SCRIPTS | 6 ADVANCED FEATURES | ZERO MANUAL SETUP
-    ✨ Complete Meter Coverage | Multi-User Ready | Fully Observable
-```
+<svg width="100%" height="500" viewBox="0 0 1200 500" xmlns="http://www.w3.org/2000/svg" style="background-color: #0d1117; border-radius: 8px; border: 2px solid #00ffff;">
+  <defs>
+    <style>
+      @keyframes flow-right {
+        0% { transform: translateX(-20px); opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { transform: translateX(20px); opacity: 0; }
+      }
+      @keyframes glow-pulse {
+        0%, 100% { filter: drop-shadow(0 0 4px #00ffff); }
+        50% { filter: drop-shadow(0 0 15px #00ffff); }
+      }
+      @keyframes rotate-circle {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .particle { animation: flow-right 3s ease-in-out infinite; }
+      .particle:nth-child(2) { animation-delay: 0.5s; }
+      .particle:nth-child(3) { animation-delay: 1s; }
+      .particle:nth-child(4) { animation-delay: 1.5s; }
+      .glow-box { animation: glow-pulse 2s ease-in-out infinite; }
+      .rotate { animation: rotate-circle 4s linear infinite; }
+    </style>
+    
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#00ffff" />
+    </marker>
+  </defs>
+  
+  <!-- Background grid -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a2f3f" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="500" fill="url(#grid)" />
+  
+  <!-- CMA OPERATIONS (Left) -->
+  <text x="50" y="40" font-size="18" font-weight="bold" fill="#00ffff">📝 CMA Operations</text>
+  <circle cx="80" cy="120" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
+  <text x="70" y="130" font-size="12" fill="#fff" text-anchor="middle">entry</text>
+  
+  <circle cx="80" cy="200" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
+  <text x="70" y="205" font-size="12" fill="#fff" text-anchor="middle">publish</text>
+  
+  <circle cx="80" cy="280" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
+  <text x="70" y="285" font-size="12" fill="#fff" text-anchor="middle">delete</text>
+  
+  <circle cx="80" cy="360" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
+  <text x="70" y="365" font-size="12" fill="#fff" text-anchor="middle">workflow</text>
+  
+  <!-- Animated particles flowing to Kafka -->
+  <g class="particle">
+    <circle cx="150" cy="120" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
+  </g>
+  <g class="particle" style="animation-delay: 0.5s;">
+    <circle cx="150" cy="200" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
+  </g>
+  <g class="particle" style="animation-delay: 1s;">
+    <circle cx="150" cy="280" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
+  </g>
+  <g class="particle" style="animation-delay: 1.5s;">
+    <circle cx="150" cy="360" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
+  </g>
+  
+  <!-- KAFKA (Center-Left) -->
+  <rect x="280" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#39ff14" stroke-width="3" class="glow-box"/>
+  <text x="340" y="135" font-size="16" font-weight="bold" fill="#39ff14" text-anchor="middle">📨 KAFKA</text>
+  <text x="340" y="160" font-size="11" fill="#00ff00" text-anchor="middle">Event Stream</text>
+  <text x="340" y="185" font-size="10" fill="#7fff00" text-anchor="middle">10k+/run</text>
+  
+  <!-- Animated flow arrows from CMA to Kafka -->
+  <line x1="105" y1="120" x2="280" y2="120" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
+  <line x1="105" y1="200" x2="280" y2="200" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
+  <line x1="105" y1="280" x2="280" y2="280" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
+  <line x1="105" y1="360" x2="280" y2="360" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
+  
+  <!-- MONGO (Center) -->
+  <rect x="480" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#0080ff" stroke-width="3" class="glow-box"/>
+  <text x="540" y="135" font-size="16" font-weight="bold" fill="#0080ff" text-anchor="middle">🗄️ MONGO</text>
+  <text x="540" y="160" font-size="11" fill="#00bfff" text-anchor="middle">Snapshot</text>
+  <text x="540" y="185" font-size="10" fill="#00bfff" text-anchor="middle">Sync</text>
+  
+  <!-- Flow particles Kafka to Mongo -->
+  <g class="particle">
+    <circle cx="420" cy="250" r="5" fill="#39ff14" filter="drop-shadow(0 0 5px #39ff14)"/>
+  </g>
+  <g class="particle" style="animation-delay: 0.8s;">
+    <circle cx="420" cy="250" r="5" fill="#39ff14" filter="drop-shadow(0 0 5px #39ff14)"/>
+  </g>
+  
+  <!-- Arrow Kafka to Mongo -->
+  <line x1="400" y1="250" x2="480" y2="250" stroke="#39ff14" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- ELASTICSEARCH (Center-Right) -->
+  <rect x="680" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#c833ff" stroke-width="3" class="glow-box"/>
+  <text x="740" y="135" font-size="16" font-weight="bold" fill="#c833ff" text-anchor="middle">🔍 ES</text>
+  <text x="740" y="160" font-size="11" fill="#dd33ff" text-anchor="middle">Index</text>
+  <text x="740" y="185" font-size="10" fill="#dd33ff" text-anchor="middle">Metrics</text>
+  
+  <!-- Flow particles Mongo to ES -->
+  <g class="particle">
+    <circle cx="620" cy="250" r="5" fill="#0080ff" filter="drop-shadow(0 0 5px #0080ff)"/>
+  </g>
+  <g class="particle" style="animation-delay: 0.8s;">
+    <circle cx="620" cy="250" r="5" fill="#0080ff" filter="drop-shadow(0 0 5px #0080ff)"/>
+  </g>
+  
+  <!-- Arrow Mongo to ES -->
+  <line x1="600" y1="250" x2="680" y2="250" stroke="#0080ff" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- DASHBOARDS (Right) -->
+  <rect x="880" y="100" width="280" height="300" rx="8" fill="#0f1419" stroke="#ff006e" stroke-width="3" class="glow-box"/>
+  <text x="1020" y="135" font-size="16" font-weight="bold" fill="#ff1493" text-anchor="middle">📊 DASHBOARDS</text>
+  <text x="1020" y="165" font-size="11" fill="#ff006e" text-anchor="middle">Content Lifecycle</text>
+  <text x="1020" y="190" font-size="11" fill="#ff006e" text-anchor="middle">Workflow Health</text>
+  <text x="1020" y="215" font-size="11" fill="#ff006e" text-anchor="middle">Team Adoption</text>
+  <text x="1020" y="240" font-size="10" fill="#ff1493" text-anchor="middle">KPI Tracking</text>
+  
+  <!-- Flow particles ES to Dashboards -->
+  <g class="particle">
+    <circle cx="820" cy="250" r="5" fill="#c833ff" filter="drop-shadow(0 0 5px #c833ff)"/>
+  </g>
+  <g class="particle" style="animation-delay: 0.8s;">
+    <circle cx="820" cy="250" r="5" fill="#c833ff" filter="drop-shadow(0 0 5px #c833ff)"/>
+  </g>
+  
+  <!-- Arrow ES to Dashboards -->
+  <line x1="800" y1="250" x2="880" y2="250" stroke="#c833ff" stroke-width="2" marker-end="url(#arrowhead)"/>
+  
+  <!-- Flow label indicators -->
+  <text x="185" y="90" font-size="11" fill="#00ffff" text-anchor="middle">events</text>
+  <text x="385" y="75" font-size="11" fill="#39ff14" text-anchor="middle">consume</text>
+  <text x="585" y="75" font-size="11" fill="#0080ff" text-anchor="middle">nightly</text>
+  <text x="785" y="75" font-size="11" fill="#c833ff" text-anchor="middle">index</text>
+  <text x="985" y="75" font-size="11" fill="#ff006e" text-anchor="middle">visualize</text>
+  
+  <!-- Summary at bottom -->
+  <text x="600" y="430" font-size="14" font-weight="bold" fill="#00ffff" text-anchor="middle">🚀 Continuous Meter Event Generation Pipeline</text>
+  <text x="600" y="460" font-size="12" fill="#39ff14" text-anchor="middle">✨ 24+ Scripts | 10k+ Entries/run | Complete Meter Coverage | Multi-User Ready | Zero Manual Setup</text>
+</svg>
 
 </div>
 
@@ -629,6 +736,7 @@ jobs:
 #### 1. High-Level System Architecture
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#00ffff', 'primaryBorderColor':'#00ffff', 'lineColor':'#39ff14', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
 graph TB
     subgraph Repo["THIS REPO"]
         subgraph FrontEnd["Frontend Layer"]
@@ -728,17 +836,22 @@ graph TB
     MONGO -->|Snapshot scan| ES
     ES -->|Powers| DASH
     
-    style Bootstrap fill:#e1f5ff
-    style Periodic fill:#e1f5ff
-    style Coverage fill:#fff3e0
-    style UserMgmt fill:#f3e5f5
-    style Libraries fill:#e8f5e9
-    style FrontEnd fill:#fce4ec
+    style Repo fill:#0d1117,stroke:#00ffff,color:#00ffff
+    style FrontEnd fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style Bootstrap fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Periodic fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Coverage fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style UserMgmt fill:#1a1f26,stroke:#0080ff,color:#00bfff
+    style Libraries fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Stack fill:#1a1f26,stroke:#c833ff,color:#dd33ff
+    style Events fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Downstream fill:#1a1f26,stroke:#c833ff,color:#dd33ff
 ```
 
 #### 2. Complete Automation Workflow & Dependencies
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#00ffff', 'primaryBorderColor':'#39ff14', 'lineColor':'#00ffff', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
 graph LR
     CI["CI Trigger<br/>(every 5 min)"]
     
@@ -790,18 +903,19 @@ graph LR
     Users --> HIST
     HIST --> DASH
     
-    style CI fill:#ffecb3
-    style Init fill:#e1f5ff
-    style Maint fill:#e1f5ff
-    style Lifecycle fill:#fff3e0
-    style Meter fill:#f3e5f5
-    style Users fill:#e8f5e9
-    style Output fill:#fff9c4
+    style CI fill:#1a1f26,stroke:#ff1493,color:#ff1493
+    style Init fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Maint fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Lifecycle fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style Meter fill:#1a1f26,stroke:#c833ff,color:#dd33ff
+    style Users fill:#1a1f26,stroke:#0080ff,color:#00bfff
+    style Output fill:#1a1f26,stroke:#00ffff,color:#00ffff
 ```
 
 #### 3. Entry Placeholder Resolution Flow (LLD)
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#00ffff', 'primaryBorderColor':'#0080ff', 'lineColor':'#39ff14', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
 graph TD
     START["Entry from manifest<br/>with placeholder fields"] --> PARSE["Parse field values<br/>for placeholders<br/>(__TIMESTAMP__, __UUID__,<br/>__RANDOM_INT__, __RANDOM_CHOICE__,<br/>__ENTRY_UID__, __TAX_TERMS__)"]
     
@@ -825,24 +939,25 @@ graph TD
     BUILD --> ENTRY["Create/update entry<br/>with resolved fields"]
     ENTRY --> TRIGGER["Trigger entry_created<br/>or entry_updated<br/>event"]
     
-    style START fill:#fff3e0
-    style PARSE fill:#e1f5ff
-    style CHECK fill:#ffe0b2
-    style TS fill:#c8e6c9
-    style UUID fill:#c8e6c9
-    style RINT fill:#c8e6c9
-    style RCHOICE fill:#c8e6c9
-    style EUID fill:#c8e6c9
-    style TAX fill:#c8e6c9
-    style NOOP fill:#c8e6c9
-    style BUILD fill:#f8bbd0
-    style ENTRY fill:#ffccbc
-    style TRIGGER fill:#fff9c4
+    style START fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style PARSE fill:#1a1f26,stroke:#0080ff,color:#00bfff
+    style CHECK fill:#1a1f26,stroke:#ff1493,color:#ff1493
+    style TS fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style UUID fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style RINT fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style RCHOICE fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style EUID fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style TAX fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style NOOP fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style BUILD fill:#1a1f26,stroke:#c833ff,color:#dd33ff
+    style ENTRY fill:#1a1f26,stroke:#00ffff,color:#00ffff
+    style TRIGGER fill:#1a1f26,stroke:#ff006e,color:#ff1493
 ```
 
 #### 4. Frontend Integration & React Component Architecture
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#ff1493', 'primaryBorderColor':'#ff006e', 'lineColor':'#ff1493', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
 graph TB
     subgraph Frontend["Frontend (Vite + React)<br/>Port 5173"]
         Router["React Router<br/>Routes"]
@@ -897,15 +1012,16 @@ graph TB
     
     Pages --> Hero
     
-    style Pages fill:#fce4ec
-    style Components fill:#f3e5f5
-    style Libs fill:#e8f5e9
-    style External fill:#e0e0e0
+    style Pages fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style Components fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style Libs fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style External fill:#1a1f26,stroke:#c833ff,color:#dd33ff
 ```
 
 #### 5. Complete Data Flow: CMA Operation → Events → Analytics Dashboard
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#00ffff', 'primaryBorderColor':'#00ffff', 'lineColor':'#ff006e', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
 graph LR
     subgraph Origins["CMA Operations<br/>(Automation generates)"]
         O1["📝 entry_created<br/>(10k/run)"]
@@ -971,11 +1087,11 @@ graph LR
     ES2 --> D3
     ES1 --> D3
     
-    style Origins fill:#fff3e0
-    style Transport fill:#e0e0e0
-    style Snapshot fill:#b3e5fc
-    style Index fill:#c8e6c9
-    style Dashboard fill:#f8bbd0
+    style Origins fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style Transport fill:#1a1f26,stroke:#00ffff,color:#00ffff
+    style Snapshot fill:#1a1f26,stroke:#0080ff,color:#00bfff
+    style Index fill:#1a1f26,stroke:#39ff14,color:#7fff00
+    style Dashboard fill:#1a1f26,stroke:#ff006e,color:#ff1493
 ```
 
 ---
