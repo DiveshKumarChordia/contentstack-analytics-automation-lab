@@ -1152,7 +1152,7 @@ graph TB
     style External fill:#1a1f26,stroke:#c833ff,color:#dd33ff
 ```
 
-#### 5. Complete Data Flow: CMA Operation → Events → Analytics Dashboard
+#### 5. Complete Data Flow: CMA Operation → Events → Analytics Dashboard (with Multi-User + 4-Phase Analytics)
 
 ```mermaid
 %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor':'#0f1419', 'primaryTextColor':'#00ffff', 'primaryBorderColor':'#00ffff', 'lineColor':'#ff006e', 'secondBkgColor':'#1a1f26', 'tertiaryColor':'#0d1117'}}}%%
@@ -1163,11 +1163,28 @@ graph LR
         O3["📤 entry_published<br/>(60% of entries)"]
         O4["🔄 entry_workflow_*<br/>(5 patterns)"]
         O5["🗑️ entry_deleted<br/>(aged entries)"]
-        O6["👤 org_user_invited<br/>(10 new/run)"]
+        O6["👥 org_user_invited<br/>(10 new/run)"]
+    end
+    
+    subgraph MultiUser["👥 MULTI-USER TRACKING<br/>(Round-Robin Tokens)"]
+        MU1["User A<br/>token1"]
+        MU2["User B<br/>token2"]
+        MU3["User C<br/>token3"]
+        MU1 -.->|user_uid| O1
+        MU2 -.->|user_uid| O3
+        MU3 -.->|user_uid| O4
     end
     
     subgraph Transport["Kafka Transport"]
         KAFKA["Kafka Cluster<br/>(Topic per operation)"]
+    end
+    
+    subgraph LocalAnalytics["⭐ LOCAL: 4-PHASE ANALYTICS<br/>(Real-time, This Run)"]
+        LA1["Phase 1: Extract KPIs<br/>(audit trail)"]
+        LA2["Phase 2: Normalize<br/>(schema)"]
+        LA3["Phase 3: Stack Metrics<br/>(trends, health)"]
+        LA4["Phase 4: Dashboard<br/>(50+ KPIs)"]
+        LA1 --> LA2 --> LA3 --> LA4
     end
     
     subgraph Snapshot["Mongo Snapshot<br/>(analytics-data-sync)"]
@@ -1198,6 +1215,11 @@ graph LR
     O5 -->|triggered| KAFKA
     O6 -->|triggered| KAFKA
     
+    O1 -->|audit trail| LA1
+    O3 -->|audit trail| LA1
+    O4 -->|audit trail| LA1
+    O6 -->|audit trail| LA1
+    
     KAFKA -->|consume| MONGO
     MONGO -->|nightly cron| ES1
     MONGO -->|nightly cron| ES2
@@ -1221,8 +1243,18 @@ graph LR
     ES2 --> D3
     ES1 --> D3
     
+    LA4 -->|50+ KPIs| D1
+    LA4 -->|50+ KPIs| D2
+    LA4 -->|50+ KPIs| D3
+    
     style Origins fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style MultiUser fill:#1a1f26,stroke:#0080ff,color:#00bfff
     style Transport fill:#1a1f26,stroke:#00ffff,color:#00ffff
+    style LocalAnalytics fill:#1a1f26,stroke:#00b300,color:#39ff14
+    style LA1 fill:#1a1f26,stroke:#ff8c00,color:#ffa500
+    style LA2 fill:#1a1f26,stroke:#9933ff,color:#dd33ff
+    style LA3 fill:#1a1f26,stroke:#ff006e,color:#ff1493
+    style LA4 fill:#1a1f26,stroke:#00b300,color:#39ff14
     style Snapshot fill:#1a1f26,stroke:#0080ff,color:#00bfff
     style Index fill:#1a1f26,stroke:#39ff14,color:#7fff00
     style Dashboard fill:#1a1f26,stroke:#ff006e,color:#ff1493
