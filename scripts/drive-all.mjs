@@ -181,8 +181,12 @@ function buildRecord(results, startedAt, finishedAt) {
     planned: r.report?.planned ?? null,
     actual: r.report?.actual ?? null,
     failed: r.report?.failed ?? 0,
+    validation: r.report?.validation ?? null,
     kpis: r.report?.kpis ?? {},
     errors: r.report?.errors ?? [],
+    entryCountBefore: r.report?.entryCountBefore ?? {},
+    entryCountAfter: r.report?.entryCountAfter ?? {},
+    logTrail: r.report?.logTrail ?? null,
   }))
   const kpis = {}
   for (const s of steps) {
@@ -191,12 +195,17 @@ function buildRecord(results, startedAt, finishedAt) {
     }
   }
   const errors = []
+  const validationWarnings = []
   for (const s of steps) {
     if (!s.ok && !(s.errors && s.errors.length)) {
       errors.push({ step: s.name, label: null, message: 'step exited non-zero' })
     }
     for (const e of s.errors || []) {
       errors.push({ step: s.name, label: e.label || null, message: e.message })
+    }
+    // Collect validation warnings
+    if (s.validation && !s.validation.valid) {
+      validationWarnings.push({ step: s.name, message: s.validation.message })
     }
   }
   const stepsOk = steps.filter((s) => s.ok).length
@@ -214,6 +223,7 @@ function buildRecord(results, startedAt, finishedAt) {
     kpis,
     steps,
     errors,
+    validationWarnings,
   }
 }
 
@@ -240,11 +250,47 @@ function renderMarkdown(rec) {
   L.push('| Step | Result | Planned | Actual | Failed | Time |')
   L.push('|---|:--:|--:|--:|--:|--:|')
   for (const s of rec.steps) {
+    const valid = s.validation ? (s.validation.valid ? '✓' : '✗') : ''
     L.push(
       `| ${esc(s.name)} | ${s.ok ? '✅' : '❌'} | ${s.planned ?? '–'} | ${s.actual ?? '–'} | ${s.failed || 0} | ${(s.ms / 1000).toFixed(1)}s |`,
     )
   }
   L.push('')
+
+  // Show validation warnings
+  if (rec.validationWarnings.length) {
+    L.push('### ⚠️ Validation warnings (Planned ≠ Actual + Failed)')
+    for (const w of rec.validationWarnings) {
+      L.push(`- **${w.step}**: ${w.message}`)
+    }
+    L.push('')
+  }
+
+  // Show entry count snapshots
+  const stepsWithCounts = rec.steps.filter((s) => Object.keys(s.entryCountBefore).length > 0)
+  if (stepsWithCounts.length) {
+    L.push('### 📊 Entry count snapshots (tiered retention)')
+    for (const s of stepsWithCounts) {
+      if (Object.keys(s.entryCountBefore).length) {
+        L.push(`\n**${s.name}:**`)
+        L.push('| Content Type | Before | After | Change |')
+        L.push('|---|--:|--:|--:|')
+        const allCTs = new Set([
+          ...Object.keys(s.entryCountBefore),
+          ...Object.keys(s.entryCountAfter),
+        ])
+        for (const ct of Array.from(allCTs).sort()) {
+          const before = s.entryCountBefore[ct] ?? 0
+          const after = s.entryCountAfter[ct] ?? 0
+          const change = after - before
+          const arrow = change < 0 ? '↓' : change > 0 ? '↑' : '→'
+          L.push(`| ${ct} | ${before} | ${after} | ${arrow} ${Math.abs(change)} |`)
+        }
+      }
+    }
+    L.push('')
+  }
+
   if (rec.errors.length) {
     L.push('### ⚠️ Error audit log')
     L.push('| Step | Case | Message |')

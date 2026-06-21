@@ -24,6 +24,9 @@ import { resolve } from 'node:path'
  * @param {number} [data.failed]   how many failed
  * @param {Object<string,number>} [data.kpis]  named counters (e.g. { created: 5 })
  * @param {Array<{label:string,message:string}>} [data.errors]  per-item failures
+ * @param {Object<string,number>} [data.entryCountBefore]  entry counts by CT before step (tiered)
+ * @param {Object<string,number>} [data.entryCountAfter]   entry counts by CT after step
+ * @param {string} [data.logTrail]  detailed operation log
  */
 export function writeStepReport(data = {}) {
   const dir = process.env.RUN_REPORT_DIR
@@ -31,12 +34,31 @@ export function writeStepReport(data = {}) {
   if (!dir || !slug) return // standalone run — nothing to collect
   try {
     mkdirSync(dir, { recursive: true })
+
+    // Validate: planned should equal actual + failed
+    const planned = Number.isFinite(data.planned) ? data.planned : null
+    const actual = Number.isFinite(data.actual) ? data.actual : null
+    const failed = Number.isFinite(data.failed) ? data.failed : 0
+
+    let validation = null
+    if (planned != null && actual != null) {
+      const sum = actual + failed
+      validation = {
+        valid: sum === planned,
+        message: sum === planned ? null : `Mismatch: planned=${planned} but actual+failed=${sum} (${actual}+${failed})`,
+      }
+    }
+
     const payload = {
-      planned: Number.isFinite(data.planned) ? data.planned : null,
-      actual: Number.isFinite(data.actual) ? data.actual : null,
-      failed: Number.isFinite(data.failed) ? data.failed : 0,
+      planned,
+      actual,
+      failed,
+      validation,
       kpis: data.kpis && typeof data.kpis === 'object' ? data.kpis : {},
       errors: Array.isArray(data.errors) ? data.errors.slice(0, 25) : [],
+      entryCountBefore: data.entryCountBefore && typeof data.entryCountBefore === 'object' ? data.entryCountBefore : {},
+      entryCountAfter: data.entryCountAfter && typeof data.entryCountAfter === 'object' ? data.entryCountAfter : {},
+      logTrail: data.logTrail ? String(data.logTrail).slice(0, 5000) : null,
     }
     writeFileSync(resolve(dir, `${slug}.json`), JSON.stringify(payload), 'utf-8')
   } catch {
