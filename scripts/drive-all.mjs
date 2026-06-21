@@ -278,10 +278,57 @@ function appendHistory(rec) {
   }
 }
 
+async function validateEnvironment() {
+  console.log('\n━━━ Environment Validation ━━━')
+  const required = [
+    'CONTENTSTACK_API_KEY',
+    'VITE_CONTENTSTACK_API_KEY',
+    'CONTENTSTACK_MANAGEMENT_TOKEN',
+    'CONTENTSTACK_PUBLISH_ENVIRONMENT',
+  ]
+  const optional = [
+    'CONTENTSTACK_USER_EMAIL',
+    'CONTENTSTACK_USER_PASSWORD',
+    'CONTENTSTACK_USER_AUTHTOKEN',
+    'CONTENTSTACK_USER_TOTP_SECRET',
+  ]
+
+  let allSet = true
+  for (const key of required) {
+    const value = process.env[key]
+    const status = value ? '✓' : '✗'
+    console.log(`  ${status} ${key}: ${value ? '***' + value.slice(-4) : 'MISSING'}`)
+    if (!value) allSet = false
+  }
+
+  console.log('\n  User Session (for multi-user steps):')
+  const hasAuthToken = !!process.env.CONTENTSTACK_USER_AUTHTOKEN
+  const hasEmailPassword = !!process.env.CONTENTSTACK_USER_EMAIL && !!process.env.CONTENTSTACK_USER_PASSWORD
+  const has2FA = !!process.env.CONTENTSTACK_USER_TOTP_SECRET
+
+  if (hasAuthToken) {
+    console.log(`  ✓ CONTENTSTACK_USER_AUTHTOKEN configured (bypasses login)`)
+  } else if (hasEmailPassword) {
+    const twoFaStatus = has2FA ? '✓ (with 2FA)' : '⚠ (no 2FA secret)'
+    console.log(`  ✓ CONTENTSTACK_USER_EMAIL + CONTENTSTACK_USER_PASSWORD configured ${twoFaStatus}`)
+  } else {
+    console.log(`  ⚠ No user credentials set — multi-user steps will be skipped`)
+    console.log(`    (requires CONTENTSTACK_USER_AUTHTOKEN OR CONTENTSTACK_USER_EMAIL+PASSWORD)`)
+  }
+
+  if (!allSet) {
+    console.error('\n✗ Missing required environment variables — see above')
+    process.exit(1)
+  }
+  console.log('')
+}
+
 async function main() {
   const startedAt = new Date().toISOString()
   console.log(`drive-all  mode=${MODE}  dry-run=${DRY_RUN}`)
   console.log(`now: ${startedAt}`)
+
+  await validateEnvironment()
 
   const allResults = []
   if (MODE === 'bootstrap' || MODE === 'full') {

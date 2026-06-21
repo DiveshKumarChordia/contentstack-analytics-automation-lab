@@ -86,6 +86,72 @@ export async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms))
 }
 
+/**
+ * Enhanced fetch with detailed error logging and retry logic for transient failures.
+ * Retries on 503/504 (server errors) and 429 (rate limit).
+ * Logs full request/response details for debugging 422/401 errors.
+ */
+export async function fetchWithLogging(url, options = {}, { maxRetries = 3, logPrefix = '' } = {}) {
+  const method = options.method || 'GET'
+  let lastError = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options)
+      const body = await res.json().catch(() => ({}))
+
+      // Success
+      if (res.ok) {
+        if (logPrefix && attempt > 1) {
+          console.log(`  ${logPrefix} succeeded on attempt ${attempt}`)
+        }
+        return { ok: true, status: res.status, body }
+      }
+
+      // Log full details for client/validation errors
+      if (res.status === 422) {
+        console.error(
+          `  ✗ ${logPrefix || method} ${url.split('/v3/')[1] || url}`,
+          `(422 Unprocessable)`,
+        )
+        console.error(`    Request: ${JSON.stringify(options.body).slice(0, 200)}`)
+        console.error(`    Response: ${JSON.stringify(body).slice(0, 300)}`)
+      } else if (res.status === 401) {
+        console.error(
+          `  ✗ ${logPrefix || method} (401 Unauthorized/Permission Denied)`,
+        )
+        console.error(`    Error: ${body?.error_message || body?.message || JSON.stringify(body).slice(0, 150)}`)
+      } else if (res.status === 404) {
+        console.warn(`  ⚠ ${logPrefix || method} (404 Not Found)`)
+      }
+
+      // Retry on server errors and rate limits
+      const isTransient = res.status >= 503 || res.status === 429
+      if (isTransient && attempt < maxRetries) {
+        const wait = attempt < 2 ? 2000 : 5000 * attempt
+        console.warn(
+          `  ⚠ ${logPrefix || method} (${res.status}) — retrying in ${wait}ms (attempt ${attempt}/${maxRetries})`,
+        )
+        await sleep(wait)
+        continue
+      }
+
+      return { ok: false, status: res.status, body }
+    } catch (e) {
+      lastError = e
+      if (attempt < maxRetries) {
+        console.warn(`  ⚠ ${logPrefix || method} network error: ${e.message} — retrying in 2s`)
+        await sleep(2000)
+        continue
+      }
+    }
+  }
+
+  console.error(`  ✗ ${logPrefix || method} ${url.split('/v3/')[1] || url} failed after ${maxRetries} attempts`)
+  if (lastError) console.error(`    Last error: ${lastError.message}`)
+  return { ok: false, status: 0, body: { error: lastError?.message } }
+}
+
 export async function contentTypeExists(base, headers, uid) {
   const url = `${base}/v3/content_types/${uid}`
   const res = await fetch(url, { method: 'GET', headers })
@@ -94,20 +160,15 @@ export async function contentTypeExists(base, headers, uid) {
 
 export async function createContentType(base, headers, { uid, title, schema }) {
   const url = `${base}/v3/content_types`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      content_type: {
-        title,
-        uid,
-        schema,
-        options: defaultContentTypeOptions(),
-      },
-    }),
+  const bodyStr = JSON.stringify({
+    content_type: {
+      title,
+      uid,
+      schema,
+      options: defaultContentTypeOptions(),
+    },
   })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'POST', headers, body: bodyStr }, { maxRetries: 2, logPrefix: `Create CT ${uid}` })
 }
 
 /** List all content types on the stack. */
@@ -135,13 +196,8 @@ export async function deleteContentType(base, headers, uid, { force = true } = {
 export async function createEntry(base, headers, contentTypeUid, entryFields, locale) {
   const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
   const url = `${base}/v3/content_types/${contentTypeUid}/entries${q}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ entry: entryFields }),
-  })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  const bodyStr = JSON.stringify({ entry: entryFields })
+  return fetchWithLogging(url, { method: 'POST', headers, body: bodyStr }, { maxRetries: 2, logPrefix: `Create entry ${contentTypeUid}` })
 }
 
 /** Update (save) an entry without publishing. Used for entries_in_progress meter. */
@@ -166,19 +222,14 @@ export async function publishEntry(
   publishEnv,
 ) {
   const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}/publish`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      entry: {
-        environments: [publishEnv],
-        locales: [locale],
-      },
-      locale,
-    }),
+  const bodyStr = JSON.stringify({
+    entry: {
+      environments: [publishEnv],
+      locales: [locale],
+    },
+    locale,
   })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'POST', headers, body: bodyStr }, { maxRetries: 2, logPrefix: `Publish ${contentTypeUid}/${entryUid}` })
 }
 
 /** Unpublish a single entry from an environment/locale (mirror of publishEntry). */
@@ -226,9 +277,7 @@ export async function listEntries(
   if (asc) params.set('asc', asc)
   const q = params.toString()
   const url = `${base}/v3/content_types/${contentTypeUid}/entries${q ? `?${q}` : ''}`
-  const res = await fetch(url, { method: 'GET', headers })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'GET', headers }, { maxRetries: 3, logPrefix: `List entries ${contentTypeUid}` })
 }
 
 export async function getLatestEntryUid(
