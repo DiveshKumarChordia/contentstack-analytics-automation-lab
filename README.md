@@ -1414,7 +1414,7 @@ npm run warm:launch-urls
 
 ### All 29 Scripts
 
-**[See "All 24+ Scripts Reference" section below for complete list]**
+**[See "All 29 Scripts Reference" section below for complete list]**
 
 ---
 
@@ -1710,7 +1710,7 @@ See **[docs/COMPLETE_ANALYTICS_AUDIT.md](docs/COMPLETE_ANALYTICS_AUDIT.md)** for
 
 ---
 
-## All 24+ Scripts Reference
+## All 29 Scripts Reference
 
 ### Orchestration
 
