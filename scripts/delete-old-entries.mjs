@@ -232,6 +232,16 @@ async function main() {
   console.log(`  delete:  concurrency=${ctx.concurrency}  max-per-run=${ctx.maxPerRun || 'unlimited'}`)
   if (DRY_RUN) console.log('** DRY RUN — no API writes **')
 
+  // SNAPSHOT: Entry counts BEFORE tiered retention
+  console.log('\n→ Capturing entry counts (BEFORE deletion)…')
+  const entryCountBefore = {}
+  for (const ct of contentTypes) {
+    const { ok, body } = await listEntries(base, headers, ct, { includeCount: true })
+    entryCountBefore[ct] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalBefore = Object.values(entryCountBefore).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries before: ${totalBefore}`)
+
   // Per-band running totals for the dashboard.
   const perBand = {}
   for (const b of bands) perBand[b.name] = { inBand: 0, deleted: 0 }
@@ -245,6 +255,17 @@ async function main() {
     }
   }
 
+  // SNAPSHOT: Entry counts AFTER tiered retention
+  console.log('\n→ Capturing entry counts (AFTER deletion)…')
+  const entryCountAfter = {}
+  for (const ct of contentTypes) {
+    const { ok, body } = await listEntries(base, headers, ct, { includeCount: true })
+    entryCountAfter[ct] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalAfter = Object.values(entryCountAfter).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries after: ${totalAfter}`)
+  console.log(`  Net change: ${totalAfter - totalBefore} entries`)
+
   const totalDeleted = ctx.deletedTotal
   console.log(`\n✓ done — ${totalDeleted} deleted across ${contentTypes.length} content type(s)`)
   for (const b of bands) {
@@ -257,12 +278,16 @@ async function main() {
   writeStepReport({
     planned: totalDeleted + ctx.deferred, // what we intended to remove this run
     actual: totalDeleted,
+    entryCountBefore,  // NEW: snapshot before tiered retention
+    entryCountAfter,   // NEW: snapshot after tiered retention
     kpis: {
       deleted: totalDeleted,
       deferred: ctx.deferred,
       deletedOver30d: perBand[bands[0].name].deleted,
       deleted15to30d: perBand[bands[1].name].deleted,
       deleted7to15d: perBand[bands[2].name].deleted,
+      totalBefore,
+      totalAfter,
     },
   })
 }

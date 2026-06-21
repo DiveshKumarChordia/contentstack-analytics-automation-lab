@@ -158,6 +158,16 @@ async function main() {
   let failed = 0
   let capHit = false
 
+  // SNAPSHOT: Entry counts BEFORE creation
+  console.log('\n→ Capturing entry counts (BEFORE creation)…')
+  const entryCountBefore = {}
+  for (const ct of enabled) {
+    const { ok, body } = await listEntries(base, headers, ct.uid, { includeCount: true })
+    entryCountBefore[ct.uid] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalBefore = Object.values(entryCountBefore).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries before: ${totalBefore}`)
+
   // Content types are processed in order (so reference targets exist before the
   // types that reference them); creation within a content type runs concurrently.
   for (const ct of enabled) {
@@ -212,6 +222,17 @@ async function main() {
     })
   }
 
+  // SNAPSHOT: Entry counts AFTER creation
+  console.log('\n→ Capturing entry counts (AFTER creation)…')
+  const entryCountAfter = {}
+  for (const ct of enabled) {
+    const { ok, body } = await listEntries(base, headers, ct.uid, { includeCount: true })
+    entryCountAfter[ct.uid] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalAfter = Object.values(entryCountAfter).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries after: ${totalAfter}`)
+  console.log(`  Net created: ${totalAfter - totalBefore} entries`)
+
   console.log(
     `Periodic run complete — created ${created}/${planned}` +
       (failed ? `, ${failed} failed` : '') +
@@ -223,7 +244,15 @@ async function main() {
     planned,
     actual: created,
     failed,
-    kpis: { created, failed, capHit: capHit ? 1 : 0 },
+    entryCountBefore,  // NEW: snapshot before creation
+    entryCountAfter,   // NEW: snapshot after creation
+    kpis: {
+      created,
+      failed,
+      capHit: capHit ? 1 : 0,
+      totalBefore,
+      totalAfter,
+    },
   })
 
   // Only treat the run as failed if nothing at all was created despite trying

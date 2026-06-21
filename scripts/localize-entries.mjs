@@ -270,6 +270,16 @@ async function main() {
     return
   }
 
+  // SNAPSHOT: Entry counts BEFORE localization (master locale only)
+  console.log(`\n→ Capturing entry counts (BEFORE localization)…`)
+  const entryCountBefore = {}
+  for (const ct of contentTypes) {
+    const { ok, body } = await listEntries(base, headers, ct, { includeCount: true })
+    entryCountBefore[ct] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalBefore = Object.values(entryCountBefore).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries (master) before: ${totalBefore}`)
+
   let totalL = 0
   let totalA = 0
   let totalF = 0
@@ -285,6 +295,18 @@ async function main() {
     totalA += already
     totalF += failed
   }
+
+  // SNAPSHOT: Entry counts AFTER localization (master locale only — localized entries are in target locales)
+  console.log(`\n→ Capturing entry counts (AFTER localization)…`)
+  const entryCountAfter = {}
+  for (const ct of contentTypes) {
+    const { ok, body } = await listEntries(base, headers, ct, { includeCount: true })
+    entryCountAfter[ct] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalAfter = Object.values(entryCountAfter).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries (master) after: ${totalAfter}`)
+  console.log(`  Total localization pairs created: ${totalL}`)
+
   console.log(
     `\n✓ done — ${totalL} localized, ${totalA} already localized, ${totalF} failed`,
   )
@@ -292,11 +314,15 @@ async function main() {
     planned: totalL + totalF,
     actual: totalL,
     failed: totalF,
+    entryCountBefore,  // NEW: snapshot before localization
+    entryCountAfter,   // NEW: snapshot after localization
     kpis: {
       localized: totalL,
       already: totalA,
       localizeFailed: totalF,
-      localeTargets: targets.length,
+      localeTargets: validTargets.length,
+      totalBefore,
+      totalAfter,
     },
   })
   // Surface real failures (previously hidden as "skipped"): non-zero exit makes

@@ -64,6 +64,16 @@ async function main() {
     everyN: 10,
   })
 
+  // SNAPSHOT: Entry counts BEFORE create/delete cycle
+  console.log(`\n→ Capturing entry counts (BEFORE create/delete)…`)
+  const entryCountBefore = {}
+  for (const ct of cts) {
+    const { ok, body } = await listEntries(base, mgmt(branch), ct.uid, { includeCount: true })
+    entryCountBefore[ct.uid] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalBefore = Object.values(entryCountBefore).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries before: ${totalBefore}`)
+
   for (const ct of cts) {
     console.log(`\n→ ${ct.uid}`)
     const entries = []
@@ -99,6 +109,17 @@ async function main() {
     await sleep(500)
   }
 
+  // SNAPSHOT: Entry counts AFTER create/delete cycle
+  console.log(`\n→ Capturing entry counts (AFTER create/delete)…`)
+  const entryCountAfter = {}
+  for (const ct of cts) {
+    const { ok, body } = await listEntries(base, mgmt(branch), ct.uid, { includeCount: true })
+    entryCountAfter[ct.uid] = ok ? (body?.entries_count || 0) : 0
+  }
+  const totalAfter = Object.values(entryCountAfter).reduce((a, b) => a + b, 0)
+  console.log(`  Total entries after: ${totalAfter}`)
+  console.log(`  Net change: ${totalAfter - totalBefore} entries (should be ~0 since we create then delete)`)
+
   progress.done()
   console.log(`\n✓ permanent-deletes done`)
   console.log(`  created: ${kpis.created}, deleted: ${kpis.deleted}`)
@@ -107,7 +128,13 @@ async function main() {
     planned: cts.length * entryCount,
     actual: kpis.created,
     failed: kpis.failed,
-    kpis,
+    entryCountBefore,  // NEW: snapshot before create/delete
+    entryCountAfter,   // NEW: snapshot after create/delete
+    kpis: {
+      ...kpis,
+      totalBefore,
+      totalAfter,
+    },
   })
 }
 
