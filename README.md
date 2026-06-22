@@ -76,247 +76,79 @@ Together they create a **production-grade testing environment** running continuo
 
 ## What's Included
 
-**The Ultimate Content Lifecycle Testing & Automation Laboratory**
+A complete, enterprise-grade content lifecycle testing laboratory with three integrated components:
+
+### 🎯 **System Overview**
+
+**Frontend App** → Published entries from Delivery API with dashboard, KPIs, and monitoring  
+**Performance Testing** → Cache warming and concurrent Delivery API load testing  
+**Automation Framework** → 29 scripts orchestrating the complete CMA lifecycle
+
+**What Gets Generated:**
+- **10,000+ entries per run** across all content types
+- **50,000+ meter events per run** (create, publish, delete, localize, workflow)
+- **250k+ total events** flowing through Kafka → Mongo → Elasticsearch → Dashboards
+- **50+ KPI metrics** tracked in real-time (all-time, trends, health scores)
+- **Zero manual setup** — automation self-heals (creates missing locales, workflows, roles)
+
+### 🔧 **Bootstrap Phase** (Setup - Run Once)
+✅ Create content types with full field definitions  
+✅ Create 5 locales + fallback chains  
+✅ Create 30-branch lineage (parent → children)  
+✅ Create 5 workflow patterns with stage transitions  
+✅ Setup publishing rules for environments  
+
+### 📅 **Periodic Phase** (Every 5 Minutes)
+✅ Delete old entries (tiered retention: >30d=5k, 15-30d=10k, 7-15d=20k)  
+✅ Backfill aged entries from trash  
+✅ Create 10,000 new entries across all CTs  
+✅ Localize to 5 non-master locales (50k events)  
+✅ Publish 60% of entries, unpublish 15%  
+✅ Transition entries through workflow patterns  
+✅ Churn branch content (create/delete orphans)  
+
+### 🎯 **Meter-Coverage Phase** (6 Scenarios)
+✅ Edit-after-publish (in-progress metric)  
+✅ Permanent-deletes (soft → hard deletion)  
+✅ Aged-stalls (entries stuck in workflow > 30 days)  
+✅ No-workflow content types  
+✅ Multi-actor create-publish (user_uid dimension)  
+✅ Branch-locale deletion (orphaning events)  
+
+### 👥 **Multi-User Management**
+✅ Invite 10 new users per run (auto CMS role assignment)  
+✅ Round-robin automation across 3+ management tokens  
+✅ Random user generation (Gmail plus addressing)  
+✅ Role-based testing (5 test simulation roles)  
+✅ Collaborative workflows (review-approve-publish)  
+
+### ⭐ **4-Phase Analytics Pipeline**
+✅ **Phase 1:** Extract 50+ KPIs from audit trail  
+✅ **Phase 2:** Normalize and validate metrics  
+✅ **Phase 3:** Calculate trends, health scores, MTBF  
+✅ **Phase 4:** Visualize in dashboard (5 tabs, real-time)  
 
 ---
 
-### 🎬 EPIC DETAILED ANIMATION - AUTO-PLAYING (16 SCENES)
+### 📊 **Data Flow**
 
-<svg width="100%" height="700" viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg" style="max-width: 100%; height: auto;">
-  <defs>
-    <style>
-      @keyframes fadeInOut {
-        0% { opacity: 0; }
-        10% { opacity: 1; }
-        90% { opacity: 1; }
-        100% { opacity: 0; }
-      }
-      .scene1 { animation: fadeInOut 8s 0s infinite; }
-      .scene2 { animation: fadeInOut 8s 8s infinite; }
-      .scene3 { animation: fadeInOut 8s 16s infinite; }
-      .scene4 { animation: fadeInOut 8s 24s infinite; }
-      .scene5 { animation: fadeInOut 8s 32s infinite; }
-      .scene6 { animation: fadeInOut 8s 40s infinite; }
-      .scene7 { animation: fadeInOut 8s 48s infinite; }
-      .scene8 { animation: fadeInOut 8s 56s infinite; }
-      .scene9 { animation: fadeInOut 8s 64s infinite; }
-      .scene10 { animation: fadeInOut 8s 72s infinite; }
-      .scene11 { animation: fadeInOut 8s 80s infinite; }
-      .scene12 { animation: fadeInOut 8s 88s infinite; }
-      .scene13 { animation: fadeInOut 8s 96s infinite; }
-      .scene14 { animation: fadeInOut 8s 104s infinite; }
-      .scene15 { animation: fadeInOut 8s 112s infinite; }
-      .scene16 { animation: fadeInOut 8s 120s infinite; }
-      .title { font-size: 48px; font-weight: bold; fill: #00ffff; text-anchor: middle; filter: drop-shadow(0 0 15px #00ffff); }
-      .subtitle { font-size: 28px; fill: #39ff14; text-anchor: middle; filter: drop-shadow(0 0 10px #39ff14); }
-      .phase-title { font-size: 40px; font-weight: bold; text-anchor: middle; filter: drop-shadow(0 0 15px currentColor); }
-      .detail { font-size: 16px; text-anchor: middle; fill: #00ffff; }
-    </style>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a2f3f" stroke-width="0.5"/>
-    </pattern>
-  </defs>
-  
-  <rect width="1200" height="700" fill="#0d1117"/>
-  <rect width="1200" height="700" fill="url(#grid)" opacity="0.3"/>
+```
+CMA Operations (29 scripts)
+        ↓
+     Events (250k+/run)
+        ↓
+  Kafka (Async queue)
+        ↓
+Mongo (analytics-data-sync)
+        ↓
+Elasticsearch (METRIC_DATA_INDEX)
+        ↓
+Dashboards (Content Lifecycle, Workflow Health, Team Adoption)
+```
 
-  <g class="scene1"><text class="title" x="600" y="200">🚀 CONTENTSTACK ANALYTICS LAB 🚀</text><text class="subtitle" x="600" y="280">100+ DETAILED SCENES</text><text class="detail" x="600" y="350">Every Phase Explained</text></g>
-
-  <g class="scene2"><text class="phase-title" x="600" y="150" fill="#39ff14">🔧 BOOTSTRAP #1</text><text class="detail" x="600" y="220">bootstrap-from-manifest.mjs</text><text class="detail" x="600" y="260">✓ Create content types</text><text class="detail" x="600" y="300">✓ Define fields</text><text class="detail" x="600" y="340">✓ Set validations</text></g>
-
-  <g class="scene3"><text class="phase-title" x="600" y="150" fill="#39ff14">🔧 BOOTSTRAP #2</text><text class="detail" x="600" y="220">seed-locales-branches.mjs</text><text class="detail" x="600" y="260">✓ Create 5 locales</text><text class="detail" x="600" y="300">✓ Fallback chains</text><text class="detail" x="600" y="340">✓ 30-branch lineage</text></g>
-
-  <g class="scene4"><text class="phase-title" x="600" y="150" fill="#39ff14">🔧 BOOTSTRAP #3</text><text class="detail" x="600" y="220">seed-workflows.mjs</text><text class="detail" x="600" y="260">✓ Workflow definitions</text><text class="detail" x="600" y="300">✓ 5-stage patterns</text><text class="detail" x="600" y="340">✓ Setup transitions</text></g>
-
-  <g class="scene5"><text class="phase-title" x="600" y="150" fill="#0080ff">📅 PERIODIC #1</text><text class="detail" x="600" y="220">delete-old-entries.mjs</text><text class="detail" x="600" y="260">✓ Tiered retention:</text><text class="detail" x="600" y="300">✓ >30d=5k, 15-30d=10k, 7-15d=20k</text><text class="detail" x="600" y="340">✓ Delete oldest first</text></g>
-
-  <g class="scene6"><text class="phase-title" x="600" y="150" fill="#0080ff">📅 PERIODIC #2</text><text class="detail" x="600" y="220">backfill-aged-entries.mjs</text><text class="detail" x="600" y="260">✓ Restore from trash</text><text class="detail" x="600" y="300">✓ If count < target</text><text class="detail" x="600" y="340">✓ Preserve created_at</text></g>
-
-  <g class="scene7"><text class="phase-title" x="600" y="150" fill="#0080ff">📅 PERIODIC #3</text><text class="detail" x="600" y="220">periodic-entries-from-manifest.mjs</text><text class="detail" x="600" y="260">✓ Create 10,000 entries</text><text class="detail" x="600" y="300">✓ All content types</text><text class="detail" x="600" y="340">Creates: 10k events</text></g>
-
-  <g class="scene8"><text class="phase-title" x="600" y="150" fill="#0080ff">📅 PERIODIC #4</text><text class="detail" x="600" y="220">localize-entries.mjs</text><text class="detail" x="600" y="260">✓ 5 non-master locales</text><text class="detail" x="600" y="300">✓ Fallback chains</text><text class="detail" x="600" y="340">Creates: 50k events (10k × 5)</text></g>
-
-  <g class="scene9"><text class="phase-title" x="600" y="150" fill="#0080ff">📅 PERIODIC #5</text><text class="detail" x="600" y="220">bulk-publish-cycle.mjs</text><text class="detail" x="600" y="260">✓ Publish 60% entries</text><text class="detail" x="600" y="300">✓ Unpublish 15%</text><text class="detail" x="600" y="340">Creates: 6k+1.5k events</text></g>
-
-  <g class="scene10"><text class="phase-title" x="600" y="150" fill="#ff006e">🎯 METER-COVERAGE #1</text><text class="detail" x="600" y="220">Edit-After-Publish</text><text class="detail" x="600" y="260">✓ Create → Publish → Edit</text><text class="detail" x="600" y="300">✓ in-progress metric</text><text class="detail" x="600" y="340">Validates: all dimensions</text></g>
-
-  <g class="scene11"><text class="phase-title" x="600" y="150" fill="#ff006e">🎯 METER-COVERAGE #2</text><text class="detail" x="600" y="220">Permanent-Deletes</text><text class="detail" x="600" y="260">✓ Soft → Hard delete</text><text class="detail" x="600" y="300">✓ entry_deleted events</text><text class="detail" x="600" y="340">Deletion metrics validated</text></g>
-
-  <g class="scene12"><text class="phase-title" x="600" y="150" fill="#ff006e">🎯 METER-COVERAGE #3</text><text class="detail" x="600" y="220">Multi-Actor Round-Robin</text><text class="detail" x="600" y="260">✓ Multiple user_uid</text><text class="detail" x="600" y="300">✓ Distinct operations</text><text class="detail" x="600" y="340">Multi-user dimension validated</text></g>
-
-  <g class="scene13"><text class="phase-title" x="600" y="150" fill="#c833ff">🔧 SELF-HEALING</text><text class="detail" x="600" y="220">✅ Auto-Create Locales</text><text class="detail" x="600" y="260">✅ Auto-Create Workflows</text><text class="detail" x="600" y="300">✅ Auto-Assign Roles</text><text class="detail" x="600" y="340">ZERO Manual Intervention</text></g>
-
-  <g class="scene14"><text class="phase-title" x="600" y="150" fill="#39ff14">🌊 DATA FLOW PIPELINE</text><text class="detail" x="600" y="220">📝 CMA → 📨 KAFKA (250k+ events)</text><text class="detail" x="600" y="260">📨 KAFKA → 🗄️ MONGO</text><text class="detail" x="600" y="300">🗄️ MONGO → 🔍 ES → 📊 DASHBOARDS</text><text class="detail" x="600" y="340">Real-time KPI Analytics</text></g>
-
-  <g class="scene15"><text class="phase-title" x="600" y="150" fill="#ff1493">🚀 CI/CD AUTOMATION</text><text class="detail" x="600" y="220">⏰ GitHub Actions: Every 5 Minutes</text><text class="detail" x="600" y="260">🔑 Environment Secrets</text><text class="detail" x="600" y="300">📈 Auto-Reporting</text><text class="detail" x="600" y="340">FULLY AUTOMATED</text></g>
-
-  <g class="scene16"><text class="title" x="600" y="180">🎬 YOUR SYSTEM IN ACTION 🎬</text><text class="subtitle" x="600" y="260">29 Scripts • 10k Entries • 8+ Features</text><text class="subtitle" x="600" y="320">Zero Manual Setup • Enterprise Grade</text><text class="detail" x="600" y="400">Running Every 5 Minutes • 24/7 Continuous</text></g>
-
-  <text x="600" y="680" font-size="12" fill="#666666" text-anchor="middle">Animation loops - Each scene ~8 seconds</text>
-</svg>
-
-> **🎬 ANIMATION BREAKDOWN (16 Detailed Scenes):**
->
-> **Scenes 1-4** → BOOTSTRAP PHASE (4 setup scripts)  
-> **Scenes 5-9** → PERIODIC PHASE (5 main scripts, 10k entries)  
-> **Scenes 10-12** → METER-COVERAGE (3 key scenarios)  
-> **Scene 13** → SELF-HEALING (auto-create everything)  
-> **Scene 14** → DATA FLOW (CMA → Dashboard pipeline)  
-> **Scene 15** → CI/CD (GitHub Actions every 5 min)  
-> **Scene 16** → FINALE (system summary & impact)
->
-> ✨ **Embedded SVG with CSS animations • Auto-plays • Explains complete flow • ~2 minutes total** ✨
-
----
-
-### 🎬 System Flow Animation (Auto-Playing)
-
-<div align="center">
-
-<svg width="100%" height="500" viewBox="0 0 1200 500" xmlns="http://www.w3.org/2000/svg" style="background-color: #0d1117; border-radius: 8px; border: 2px solid #00ffff;">
-  <defs>
-    <style>
-      @keyframes flow-right {
-        0% { transform: translateX(-20px); opacity: 0; }
-        10% { opacity: 1; }
-        90% { opacity: 1; }
-        100% { transform: translateX(20px); opacity: 0; }
-      }
-      @keyframes glow-pulse {
-        0%, 100% { filter: drop-shadow(0 0 4px #00ffff); }
-        50% { filter: drop-shadow(0 0 15px #00ffff); }
-      }
-      @keyframes rotate-circle {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-      .particle { animation: flow-right 3s ease-in-out infinite; }
-      .particle:nth-child(2) { animation-delay: 0.5s; }
-      .particle:nth-child(3) { animation-delay: 1s; }
-      .particle:nth-child(4) { animation-delay: 1.5s; }
-      .glow-box { animation: glow-pulse 2s ease-in-out infinite; }
-      .rotate { animation: rotate-circle 4s linear infinite; }
-    </style>
-    
-    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <polygon points="0 0, 10 3, 0 6" fill="#00ffff" />
-    </marker>
-  </defs>
-  
-  <!-- Background grid -->
-  <defs>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1a2f3f" stroke-width="0.5"/>
-    </pattern>
-  </defs>
-  <rect width="1200" height="500" fill="url(#grid)" />
-  
-  <!-- CMA OPERATIONS (Left) -->
-  <text x="50" y="40" font-size="18" font-weight="bold" fill="#00ffff">📝 CMA Operations</text>
-  <circle cx="80" cy="120" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
-  <text x="70" y="130" font-size="12" fill="#fff" text-anchor="middle">entry</text>
-  
-  <circle cx="80" cy="200" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
-  <text x="70" y="205" font-size="12" fill="#fff" text-anchor="middle">publish</text>
-  
-  <circle cx="80" cy="280" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
-  <text x="70" y="285" font-size="12" fill="#fff" text-anchor="middle">delete</text>
-  
-  <circle cx="80" cy="360" r="25" fill="#ff006e" class="glow-box" stroke="#ff1493" stroke-width="2"/>
-  <text x="70" y="365" font-size="12" fill="#fff" text-anchor="middle">workflow</text>
-  
-  <!-- Animated particles flowing to Kafka -->
-  <g class="particle">
-    <circle cx="150" cy="120" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
-  </g>
-  <g class="particle" style="animation-delay: 0.5s;">
-    <circle cx="150" cy="200" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
-  </g>
-  <g class="particle" style="animation-delay: 1s;">
-    <circle cx="150" cy="280" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
-  </g>
-  <g class="particle" style="animation-delay: 1.5s;">
-    <circle cx="150" cy="360" r="6" fill="#00d4ff" filter="drop-shadow(0 0 6px #00d4ff)"/>
-  </g>
-  
-  <!-- KAFKA (Center-Left) -->
-  <rect x="280" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#39ff14" stroke-width="3" class="glow-box"/>
-  <text x="340" y="135" font-size="16" font-weight="bold" fill="#39ff14" text-anchor="middle">📨 KAFKA</text>
-  <text x="340" y="160" font-size="11" fill="#00ff00" text-anchor="middle">Event Stream</text>
-  <text x="340" y="185" font-size="10" fill="#7fff00" text-anchor="middle">10k+/run</text>
-  
-  <!-- Animated flow arrows from CMA to Kafka -->
-  <line x1="105" y1="120" x2="280" y2="120" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
-  <line x1="105" y1="200" x2="280" y2="200" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
-  <line x1="105" y1="280" x2="280" y2="280" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
-  <line x1="105" y1="360" x2="280" y2="360" stroke="#00ffff" stroke-width="2" stroke-dasharray="5,5" opacity="0.6"/>
-  
-  <!-- MONGO (Center) -->
-  <rect x="480" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#0080ff" stroke-width="3" class="glow-box"/>
-  <text x="540" y="135" font-size="16" font-weight="bold" fill="#0080ff" text-anchor="middle">🗄️ MONGO</text>
-  <text x="540" y="160" font-size="11" fill="#00bfff" text-anchor="middle">Snapshot</text>
-  <text x="540" y="185" font-size="10" fill="#00bfff" text-anchor="middle">Sync</text>
-  
-  <!-- Flow particles Kafka to Mongo -->
-  <g class="particle">
-    <circle cx="420" cy="250" r="5" fill="#39ff14" filter="drop-shadow(0 0 5px #39ff14)"/>
-  </g>
-  <g class="particle" style="animation-delay: 0.8s;">
-    <circle cx="420" cy="250" r="5" fill="#39ff14" filter="drop-shadow(0 0 5px #39ff14)"/>
-  </g>
-  
-  <!-- Arrow Kafka to Mongo -->
-  <line x1="400" y1="250" x2="480" y2="250" stroke="#39ff14" stroke-width="2" marker-end="url(#arrowhead)"/>
-  
-  <!-- ELASTICSEARCH (Center-Right) -->
-  <rect x="680" y="100" width="120" height="300" rx="8" fill="#0f1419" stroke="#c833ff" stroke-width="3" class="glow-box"/>
-  <text x="740" y="135" font-size="16" font-weight="bold" fill="#c833ff" text-anchor="middle">🔍 ES</text>
-  <text x="740" y="160" font-size="11" fill="#dd33ff" text-anchor="middle">Index</text>
-  <text x="740" y="185" font-size="10" fill="#dd33ff" text-anchor="middle">Metrics</text>
-  
-  <!-- Flow particles Mongo to ES -->
-  <g class="particle">
-    <circle cx="620" cy="250" r="5" fill="#0080ff" filter="drop-shadow(0 0 5px #0080ff)"/>
-  </g>
-  <g class="particle" style="animation-delay: 0.8s;">
-    <circle cx="620" cy="250" r="5" fill="#0080ff" filter="drop-shadow(0 0 5px #0080ff)"/>
-  </g>
-  
-  <!-- Arrow Mongo to ES -->
-  <line x1="600" y1="250" x2="680" y2="250" stroke="#0080ff" stroke-width="2" marker-end="url(#arrowhead)"/>
-  
-  <!-- DASHBOARDS (Right) -->
-  <rect x="880" y="100" width="280" height="300" rx="8" fill="#0f1419" stroke="#ff006e" stroke-width="3" class="glow-box"/>
-  <text x="1020" y="135" font-size="16" font-weight="bold" fill="#ff1493" text-anchor="middle">📊 DASHBOARDS</text>
-  <text x="1020" y="165" font-size="11" fill="#ff006e" text-anchor="middle">Content Lifecycle</text>
-  <text x="1020" y="190" font-size="11" fill="#ff006e" text-anchor="middle">Workflow Health</text>
-  <text x="1020" y="215" font-size="11" fill="#ff006e" text-anchor="middle">Team Adoption</text>
-  <text x="1020" y="240" font-size="10" fill="#ff1493" text-anchor="middle">KPI Tracking</text>
-  
-  <!-- Flow particles ES to Dashboards -->
-  <g class="particle">
-    <circle cx="820" cy="250" r="5" fill="#c833ff" filter="drop-shadow(0 0 5px #c833ff)"/>
-  </g>
-  <g class="particle" style="animation-delay: 0.8s;">
-    <circle cx="820" cy="250" r="5" fill="#c833ff" filter="drop-shadow(0 0 5px #c833ff)"/>
-  </g>
-  
-  <!-- Arrow ES to Dashboards -->
-  <line x1="800" y1="250" x2="880" y2="250" stroke="#c833ff" stroke-width="2" marker-end="url(#arrowhead)"/>
-  
-  <!-- Flow label indicators -->
-  <text x="185" y="90" font-size="11" fill="#00ffff" text-anchor="middle">events</text>
-  <text x="385" y="75" font-size="11" fill="#39ff14" text-anchor="middle">consume</text>
-  <text x="585" y="75" font-size="11" fill="#0080ff" text-anchor="middle">nightly</text>
-  <text x="785" y="75" font-size="11" fill="#c833ff" text-anchor="middle">index</text>
-  <text x="985" y="75" font-size="11" fill="#ff006e" text-anchor="middle">visualize</text>
-  
-  <!-- Summary at bottom -->
-  <text x="600" y="430" font-size="14" font-weight="bold" fill="#00ffff" text-anchor="middle">🚀 Continuous Meter Event Generation Pipeline</text>
-  <text x="600" y="460" font-size="12" fill="#39ff14" text-anchor="middle">✨ 29 Scripts | 10k+ Entries/run | Complete Meter Coverage | Multi-User Ready | Zero Manual Setup</text>
-</svg>
-
-</div>
+**Real-time KPI tracking:** All metrics updated as events flow  
+**Zero manual intervention:** All prerequisites auto-created  
+**Persistence:** Run history appended to run-history.json  
 
 ---
 
