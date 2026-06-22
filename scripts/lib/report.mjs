@@ -27,6 +27,8 @@ import { resolve } from 'node:path'
  * @param {Object<string,number>} [data.entryCountBefore]  entry counts by CT before step (tiered)
  * @param {Object<string,number>} [data.entryCountAfter]   entry counts by CT after step
  * @param {string} [data.logTrail]  detailed operation log
+ * @param {object} [data.operationMetrics]  operation timing stats and success rates
+ * @param {Array} [data.circuitBreakerStatus]  circuit breaker status for all monitored operations
  */
 export function writeStepReport(data = {}) {
   const dir = process.env.RUN_REPORT_DIR
@@ -59,6 +61,8 @@ export function writeStepReport(data = {}) {
       entryCountBefore: data.entryCountBefore && typeof data.entryCountBefore === 'object' ? data.entryCountBefore : {},
       entryCountAfter: data.entryCountAfter && typeof data.entryCountAfter === 'object' ? data.entryCountAfter : {},
       logTrail: data.logTrail ? String(data.logTrail).slice(0, 5000) : null,
+      operationMetrics: data.operationMetrics && typeof data.operationMetrics === 'object' ? data.operationMetrics : null,
+      circuitBreakerStatus: Array.isArray(data.circuitBreakerStatus) ? data.circuitBreakerStatus : [],
     }
     writeFileSync(resolve(dir, `${slug}.json`), JSON.stringify(payload), 'utf-8')
   } catch {

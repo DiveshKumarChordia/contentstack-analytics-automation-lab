@@ -1,0 +1,127 @@
+.toh {
+  margin-bottom: 32px;
+}
+
+.toh__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.toh__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+  gap: 4px;
+  margin-bottom: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.toh__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 60px;
+  padding: 8px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.toh__cell:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.toh__hour {
+  font-size: 0.65rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.toh__count {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #ef4444;
+  margin-bottom: 2px;
+}
+
+.toh__legend {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.toh__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toh__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.toh-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-card__label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.stat-card__value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ink);
+}
+
+.stat-card__detail {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .toh__grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .toh__cell {
+    min-height: 50px;
+  }
+
+  .toh-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

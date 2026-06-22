@@ -43,6 +43,10 @@ import {
   sleep,
 } from './lib/cma.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -186,6 +190,14 @@ async function gatherCandidates(base, headers, contentTypes, locale, maxPerCt) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('bulk-publish-cycle')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', {
+    apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…',
+  })
+
   const { apiKey, base, branch, locale, publishEnv } = loadStackAuth()
   const tokens = loadManagementTokens()
   const headers = headersForToken(apiKey, tokens[0], branch)
@@ -296,26 +308,65 @@ async function main() {
     const batch = publishBatches[i]
     if (DRY_RUN) {
       published += batch.length
+      metrics.recordOperation('entries:publish', 'publish', 0, true, { batchIndex: i, batchSize: batch.length })
       continue
     }
-    const { ok, status, body } = await bulkPublish(base, headers, {
-      entries: batch,
-      locales,
-      environments,
-    })
-    if (ok) {
-      published += batch.length
-    } else {
-      publishFailed += 1
-      console.error(`  ✗ batch ${i + 1} failed (${status}):`, body?.error_message || body?.errors || body)
-      // A 422 here is almost always the workflow Publish Rule (entries are not
-      // in an approved stage). It is systemic — every batch will fail the same
-      // way — so stop hammering the API after the first one.
-      if (status === 422) {
-        console.error('  → publish rule not satisfied; skipping remaining publish batches this run.')
-        break
+
+    // Use RetryableOperation for smart retry on transient errors
+    const publishOp = new RetryableOperation(
+      `publish-batch:${i}:${batch.length}`,
+      async () => {
+        const result = await cbManager.executeWithBreaker(
+          'bulkPublish',
+          async () => {
+            return await bulkPublish(base, headers, {
+              entries: batch,
+              locales,
+              environments,
+            })
+          },
+          { failureThreshold: 5, timeout: 60000 },
+        )
+        return result
+      },
+      {
+        maxAttempts: 3,
+        baseDelay: 2000,
+        maxDelay: 10000,
+        logger,
+        metrics,
+      },
+    )
+
+    try {
+      const result = await publishOp.execute()
+      const { ok, status, body } = result.result
+
+      if (ok) {
+        published += batch.length
+        metrics.recordOperation('entries:publish', 'publish', 0, true, { batchIndex: i, batchSize: batch.length })
+        logger.info(`Batch ${i + 1} published successfully`, { entriesCount: batch.length })
+      } else {
+        publishFailed += 1
+        metrics.recordOperation('entries:publish', 'publish', 0, false, { batchIndex: i, status })
+        logger.warn(`Publish batch failed`, { batchIndex: i, status, errorMessage: body?.error_message })
+        console.error(`  ✗ batch ${i + 1} failed (${status}):`, body?.error_message || body?.errors || body)
+        // A 422 here is almost always the workflow Publish Rule (entries are not
+        // in an approved stage). It is systemic — every batch will fail the same
+        // way — so stop hammering the API after the first one.
+        if (status === 422) {
+          logger.warn('Publish rule not satisfied, stopping batch processing', {})
+          console.error('  → publish rule not satisfied; skipping remaining publish batches this run.')
+          break
+        }
       }
+    } catch (error) {
+      publishFailed += 1
+      metrics.recordOperation('entries:publish', 'publish', 0, false, { batchIndex: i, error: error.message })
+      logger.error(`Failed to publish batch after retries`, error, { batchIndex: i, batchSize: batch.length })
+      console.error(`  ✗ batch ${i + 1} failed:`, error.message)
     }
+
     if (i < publishBatches.length - 1) await sleep(500)
   }
   if (!DRY_RUN && published > 0) console.log(`  ✓ enqueued ${published} entries`)
@@ -332,36 +383,104 @@ async function main() {
       const batch = unpublishBatches[i]
       if (DRY_RUN) {
         unpublished += batch.length
+        metrics.recordOperation('entries:unpublish', 'unpublish', 0, true, { batchIndex: i, batchSize: batch.length })
         continue
       }
-      const { ok, status, body } = await bulkUnpublish(base, headers, {
-        entries: batch,
-        locales,
-        environments,
-      })
-      if (ok) {
-        unpublished += batch.length
-      } else {
-        // 422 / 409 are common if those entries weren't published yet —
-        // not fatal for a periodic cycle. Systemic 422 → stop early.
-        console.warn(`  ⚠ batch ${i + 1} unpublish failed (${status}):`, body?.error_message || body?.errors || body)
-        if (status === 422) break
+
+      // Use RetryableOperation for smart retry on transient errors
+      const unpublishOp = new RetryableOperation(
+        `unpublish-batch:${i}:${batch.length}`,
+        async () => {
+          const result = await cbManager.executeWithBreaker(
+            'bulkUnpublish',
+            async () => {
+              return await bulkUnpublish(base, headers, {
+                entries: batch,
+                locales,
+                environments,
+              })
+            },
+            { failureThreshold: 5, timeout: 60000 },
+          )
+          return result
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 2000,
+          maxDelay: 10000,
+          logger,
+          metrics,
+        },
+      )
+
+      try {
+        const result = await unpublishOp.execute()
+        const { ok, status, body } = result.result
+
+        if (ok) {
+          unpublished += batch.length
+          metrics.recordOperation('entries:unpublish', 'unpublish', 0, true, { batchIndex: i, batchSize: batch.length })
+          logger.info(`Batch ${i + 1} unpublished successfully`, { entriesCount: batch.length })
+        } else {
+          metrics.recordOperation('entries:unpublish', 'unpublish', 0, false, { batchIndex: i, status })
+          logger.warn(`Unpublish batch failed`, { batchIndex: i, status, errorMessage: body?.error_message })
+          // 422 / 409 are common if those entries weren't published yet —
+          // not fatal for a periodic cycle. Systemic 422 → stop early.
+          console.warn(`  ⚠ batch ${i + 1} unpublish failed (${status}):`, body?.error_message || body?.errors || body)
+          if (status === 422) break
+        }
+      } catch (error) {
+        metrics.recordOperation('entries:unpublish', 'unpublish', 0, false, { batchIndex: i, error: error.message })
+        logger.error(`Failed to unpublish batch after retries`, error, { batchIndex: i, batchSize: batch.length })
+        console.warn(`  ⚠ batch ${i + 1} unpublish failed:`, error.message)
       }
+
       if (i < unpublishBatches.length - 1) await sleep(500)
     }
     if (!DRY_RUN && unpublished > 0) console.log(`  ✓ enqueued ${unpublished} entries`)
   }
 
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    published,
+    unpublished,
+    publishFailed,
+    transitioned,
+    transitionFailed,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned: toPublish.length + toUnpublish.length,
     actual: published + unpublished,
     failed: publishFailed,
-    kpis: { published, unpublished, publishFailed, transitioned, transitionFailed },
+    logTrail: logger.getLogTrail().slice(0, 5000),
+    kpis: {
+      published,
+      unpublished,
+      publishFailed,
+      transitioned,
+      transitionFailed,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
+    },
   })
   console.log('\n✓ done')
 }
 
 main().catch((err) => {
+  const logger = new StructuredLogger('bulk-publish-cycle')
+  logger.error('Script failed', err, { fatal: true })
   console.error('bulk-publish-cycle failed:', err)
   process.exit(1)
 })

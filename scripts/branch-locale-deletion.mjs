@@ -70,13 +70,14 @@ async function main() {
 
   // PHASE 1: create feature branch from base
   console.log(`\n→ create feature branch ${featureBranch}`)
-  const { ok: brOk, body: brBody } = await createBranch(base, mgmt(baseBranch), {
+  const { ok: brOk, body: brBody, status: brStatus } = await createBranch(base, mgmt(baseBranch), {
     uid: featureBranch,
     source: baseBranch || 'main',
   })
 
   if (!brOk) {
-    console.error(`Failed to create branch ${featureBranch}`)
+    const errMsg = brBody?.error_message || brBody?.message || JSON.stringify(brBody).slice(0, 200)
+    console.error(`Failed to create branch ${featureBranch}: (${brStatus}) ${errMsg}`)
     writeStepReport({
       planned: entryCount,
       actual: 0,

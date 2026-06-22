@@ -22,6 +22,7 @@ import {
   loadManagementTokens,
   headersForToken,
   listContentTypes,
+  listEntries,
   createEntry,
   deleteEntry,
   optionalEnv,
@@ -29,6 +30,10 @@ import {
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 function intEnv(name, dflt) {
   const v = optionalEnv(name)
@@ -36,6 +41,14 @@ function intEnv(name, dflt) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('permanent-deletes')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', {
+    apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…',
+  })
+
   const { apiKey, base, branch } = loadStackAuth()
   const tokens = loadManagementTokens()
   const mgmt = (br) => headersForToken(apiKey, tokens[0], br)
@@ -80,27 +93,92 @@ async function main() {
 
     // PHASE 1: create entries
     for (let i = 0; i < entryCount; i += 1) {
-      const { ok, body: ebody } = await createEntry(base, mgmt(branch), ct.uid, {
-        title: `permanent-delete ${Date.now().toString(36)}-${i}`,
-        single_line: 'to be deleted',
-      })
-      if (ok && ebody?.entry) {
-        entries.push(ebody.entry)
-        kpis.created += 1
+      const createOp = new RetryableOperation(
+        `create:${ct.uid}:${i}`,
+        async () => {
+          const result = await cbManager.executeWithBreaker(
+            'createEntry',
+            async () => {
+              return await createEntry(base, mgmt(branch), ct.uid, {
+                title: `permanent-delete ${Date.now().toString(36)}-${i}`,
+                single_line: 'to be deleted',
+              })
+            },
+            { failureThreshold: 10, timeout: 30000 },
+          )
+          return result
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 1000,
+          maxDelay: 5000,
+          logger,
+          metrics,
+        },
+      )
+
+      try {
+        const result = await createOp.execute()
+        const { ok, body: ebody } = result.result
+        if (ok && ebody?.entry) {
+          entries.push(ebody.entry)
+          kpis.created += 1
+          metrics.recordOperation('entry:create', 'create', 0, true)
+        } else {
+          metrics.recordOperation('entry:create', 'create', 0, false)
+        }
+        progress.tick({ ok })
+      } catch (error) {
+        logger.warn(`Failed to create entry`, { error: error.message })
+        metrics.recordOperation('entry:create', 'create', 0, false, { error: error.message })
+        progress.tick({ ok: false })
       }
-      progress.tick({ ok })
+
       if ((i + 1) % 5 === 0) await sleep(50)
     }
 
     console.log(`  created ${entries.length}/${entryCount}`)
 
-    // PHASE 2: permanently delete in parallel
+    // PHASE 2: permanently delete in parallel with retries
     await runWithConcurrency(
       entries,
       async (e) => {
-        const { ok } = await deleteEntry(base, mgmt(branch), ct.uid, e.uid)
-        if (ok) kpis.deleted += 1
-        progress.tick({ ok })
+        const deleteOp = new RetryableOperation(
+          `delete:${ct.uid}:${e.uid}`,
+          async () => {
+            const result = await cbManager.executeWithBreaker(
+              'deleteEntry',
+              async () => {
+                return await deleteEntry(base, mgmt(branch), {
+                  contentTypeUid: ct.uid,
+                  entryUid: e.uid,
+                })
+              },
+              { failureThreshold: 10, timeout: 30000 },
+            )
+            return result
+          },
+          {
+            maxAttempts: 3,
+            baseDelay: 1000,
+            maxDelay: 5000,
+            logger,
+            metrics,
+          },
+        )
+
+        try {
+          const success = await deleteOp.execute()
+          if (success.result.ok) {
+            kpis.deleted += 1
+            metrics.recordOperation('entry:delete', 'delete', 0, true)
+          }
+          progress.tick({ ok: success.result.ok })
+        } catch (error) {
+          logger.error(`Failed to delete entry after retries`, error, { contentTypeUid: ct.uid, entryUid: e.uid })
+          metrics.recordOperation('entry:delete', 'delete', 0, false, { error: error.message })
+          progress.tick({ ok: false })
+        }
       },
       { concurrency },
     )
@@ -124,21 +202,44 @@ async function main() {
   console.log(`\n✓ permanent-deletes done`)
   console.log(`  created: ${kpis.created}, deleted: ${kpis.deleted}`)
 
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    created: kpis.created,
+    deleted: kpis.deleted,
+    failed: kpis.failed,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned: cts.length * entryCount,
     actual: kpis.created,
     failed: kpis.failed,
-    entryCountBefore,  // NEW: snapshot before create/delete
-    entryCountAfter,   // NEW: snapshot after create/delete
+    entryCountBefore,
+    entryCountAfter,
+    logTrail: logger.getLogTrail().slice(0, 5000),
     kpis: {
       ...kpis,
       totalBefore,
       totalAfter,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
     },
   })
 }
 
 main().catch((err) => {
+  const logger = new StructuredLogger('permanent-deletes')
+  logger.error('Script failed', err, { fatal: true })
   console.error('permanent-deletes failed:', err)
   process.exit(1)
 })

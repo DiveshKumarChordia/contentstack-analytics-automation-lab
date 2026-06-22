@@ -1,0 +1,213 @@
+.cb-status {
+  --cb-ok: #22c55e;
+  --cb-warn: #f59e0b;
+  --cb-bad: #ef4444;
+}
+
+.cb-status__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.cb-status__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.cb-status__summary {
+  display: flex;
+  gap: 8px;
+}
+
+.cb-status__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cb-status__badge--closed {
+  background: color-mix(in srgb, var(--cb-ok) 15%, transparent);
+  color: var(--cb-ok);
+}
+
+.cb-status__badge--half-open {
+  background: color-mix(in srgb, var(--cb-warn) 15%, transparent);
+  color: var(--cb-warn);
+}
+
+.cb-status__badge--open {
+  background: color-mix(in srgb, var(--cb-bad) 15%, transparent);
+  color: var(--cb-bad);
+}
+
+.cb-status__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cb-status__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  transition: all 0.15s;
+}
+
+.cb-status__item--closed {
+  border-left-color: var(--cb-ok);
+  background: color-mix(in srgb, var(--cb-ok) 3%, var(--card));
+}
+
+.cb-status__item--half-open {
+  border-left-color: var(--cb-warn);
+  background: color-mix(in srgb, var(--cb-warn) 3%, var(--card));
+  animation: pulse-warn 2s ease-in-out infinite;
+}
+
+.cb-status__item--open {
+  border-left-color: var(--cb-bad);
+  background: color-mix(in srgb, var(--cb-bad) 5%, var(--card));
+  animation: pulse-bad 2s ease-in-out infinite;
+}
+
+@keyframes pulse-warn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes pulse-bad {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.cb-status__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.cb-status__icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.cb-status__info {
+  min-width: 0;
+}
+
+.cb-status__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cb-status__step {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cb-status__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cb-status__state {
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.cb-status__counts {
+  display: flex;
+  gap: 6px;
+}
+
+.cb-status__count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.cb-status__count--success {
+  background: color-mix(in srgb, var(--cb-ok) 20%, transparent);
+  color: var(--cb-ok);
+}
+
+.cb-status__count--fail {
+  background: color-mix(in srgb, var(--cb-bad) 20%, transparent);
+  color: var(--cb-bad);
+}
+
+.cb-status__right {
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.cb-status__meta {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.cb-status__meta--recovering {
+  color: var(--cb-warn);
+  font-weight: 600;
+}
+
+.cb-status__alert {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--cb-bad) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cb-bad) 30%, transparent);
+  border-left: 3px solid var(--cb-bad);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--cb-bad);
+  font-weight: 500;
+}
+
+@media (max-width: 700px) {
+  .cb-status__item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .cb-status__center {
+    align-items: flex-start;
+  }
+
+  .cb-status__right {
+    text-align: left;
+  }
+}

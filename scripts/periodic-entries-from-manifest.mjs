@@ -30,6 +30,7 @@ import {
   createEntry,
   getLatestEntryUid,
   getFirstEntryUid,
+  listEntries,
   optionalEnv,
 } from './lib/cma.mjs'
 import {
@@ -38,6 +39,10 @@ import {
   deepClone,
 } from './lib/entry-placeholders.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -86,6 +91,12 @@ async function runPool(total, concurrency, worker) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('periodic-entries-from-manifest')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', { apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…' })
+
   const { apiKey, token, base, branch, locale, publishEnv } = loadStackAuth()
   const headers = managementHeaders(apiKey, token, branch)
 
@@ -186,16 +197,53 @@ async function main() {
         fields = await resolveEntryPlaceholdersAsync(merged, registry, fetchRef)
       } catch (e) {
         failed += 1
+        logger.warn(`Placeholder resolve failed for ${ct.uid}`, { error: e.message })
         if (failed <= 10) console.error(`Placeholder resolve failed for ${ct.uid}:`, e.message)
         return
       }
 
-      const result = await createEntry(base, headers, ct.uid, fields, locale)
+      // Use RetryableOperation for smart retry on transient errors
+      const createOp = new RetryableOperation(
+        `create:${ct.uid}:${merged.title}`,
+        async () => {
+          const result = await cbManager.executeWithBreaker(
+            'createEntry',
+            async () => {
+              return await createEntry(base, headers, ct.uid, fields, locale)
+            },
+            { failureThreshold: 10, timeout: 30000 },
+          )
+          return result
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 1000,
+          maxDelay: 5000,
+          logger,
+          metrics,
+        },
+      )
+
+      let result
+      try {
+        result = await createOp.execute()
+        result = result.result
+      } catch (error) {
+        logger.error(`Failed to create entry after retries`, error, { contentTypeUid: ct.uid })
+        metrics.recordOperation('entry:create', 'create', 0, false, { contentTypeUid: ct.uid, error: error.message })
+        failed += 1
+        if (failed <= 10) {
+          console.error(`Create failed for ${ct.uid}:`, error.message)
+        }
+        return
+      }
+
       if (!result.ok) {
         // Org-level entry cap (error_code 133) is org-wide: once hit, every
         // further create fails too, so stop the whole run (non-fatal).
         if (result.status === 422 && result.body?.error_code === 133) {
           if (!capHit) {
+            logger.warn('Org entry cap reached (code 133)', { errorCode: 133 })
             console.warn(
               `Org entry cap reached (code 133) — stopping creation for this run.`,
             )
@@ -205,6 +253,11 @@ async function main() {
           return
         }
         failed += 1
+        logger.warn(`Create failed for ${ct.uid}`, {
+          status: result.status,
+          errorCode: result.body?.error_code,
+          errorMessage: result.body?.error_message,
+        })
         if (failed <= 10) {
           console.error(
             `Create failed for ${ct.uid}:`,
@@ -216,9 +269,15 @@ async function main() {
       }
 
       const uid = result.body?.entry?.uid
-      if (uid) registry.record(ct.uid, uid)
+      if (uid) {
+        registry.record(ct.uid, uid)
+        metrics.recordOperation('entry:create', 'create', 0, true, { contentTypeUid: ct.uid, entryUid: uid })
+      }
       created += 1
-      if (created % 500 === 0) console.log(`...created ${created}`)
+      if (created % 500 === 0) {
+        logger.info(`Progress checkpoint`, { created, planned })
+        console.log(`...created ${created}`)
+      }
     })
   }
 
@@ -240,18 +299,40 @@ async function main() {
       '.',
   )
 
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    created,
+    planned,
+    failed,
+    capHit,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned,
     actual: created,
     failed,
-    entryCountBefore,  // NEW: snapshot before creation
-    entryCountAfter,   // NEW: snapshot after creation
+    entryCountBefore,
+    entryCountAfter,
+    logTrail: logger.getLogTrail().slice(0, 5000),
     kpis: {
       created,
       failed,
       capHit: capHit ? 1 : 0,
       totalBefore,
       totalAfter,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
     },
   })
 
@@ -263,6 +344,8 @@ async function main() {
 }
 
 main().catch((e) => {
+  const logger = new StructuredLogger('periodic-entries-from-manifest')
+  logger.error('Script failed', e, { fatal: true })
   console.error(e)
   process.exit(1)
 })

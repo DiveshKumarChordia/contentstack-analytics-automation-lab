@@ -1,13 +1,45 @@
 import { useEffect, useMemo, useState } from 'react'
 import CalendarHeatmap from '../components/CalendarHeatmap'
 import DayAnalytics from '../components/DayAnalytics'
+import CircuitBreakerStatus from '../components/CircuitBreakerStatus'
+import ErrorClassification from '../components/ErrorClassification'
+import StepTrends from '../components/StepTrends'
+import MeterCoverage from '../components/MeterCoverage'
+import InstanceComparison from '../components/InstanceComparison'
+import VolumeTrending from '../components/VolumeTrending'
+import DashboardFilters from '../components/DashboardFilters'
+import TimeOfDayHeatmap from '../components/TimeOfDayHeatmap'
+import WeekOverWeekComparison from '../components/WeekOverWeekComparison'
+import ObservabilityMetrics from '../components/ObservabilityMetrics'
+import ExportReporting from '../components/ExportReporting'
 import './RunsDashboard.css'
+import '../components/CircuitBreakerStatus.css'
+import '../components/ErrorClassification.css'
+import '../components/StepTrends.css'
+import '../components/MeterCoverage.css'
+import '../components/InstanceComparison.css'
+import '../components/VolumeTrending.css'
+import '../components/DashboardFilters.css'
+import '../components/TimeOfDayHeatmap.css'
+import '../components/WeekOverWeekComparison.css'
+import '../components/ObservabilityMetrics.css'
+import '../components/ExportReporting.css'
 
 // drive-all appends each run to public/run-history.json (committed back by CI).
 const HISTORY_URL = import.meta.env.VITE_RUN_HISTORY_URL || '/run-history.json'
 
 const DAY = 86_400_000
+const HOUR = 3_600_000
 const ORPHAN_CASES = ['churnDisable', 'churnDetach', 'churnBranch', 'churnLocale', 'churnAllWf', 'churnRestore']
+
+// Time interval presets for dashboard filtering
+const TIME_INTERVALS = [
+  { id: '4h', label: 'Last 4h', ms: 4 * HOUR },
+  { id: '24h', label: 'Last 24h', ms: DAY },
+  { id: '7d', label: 'Last 7 days', ms: 7 * DAY },
+  { id: '30d', label: 'Last 30 days', ms: 30 * DAY },
+  { id: 'all', label: 'All time', ms: Infinity },
+]
 
 function relTime(iso) {
   const t = Date.parse(iso)
@@ -29,10 +61,15 @@ function ratioColor(r) {
 }
 
 /** Compute ~50 KPIs (grouped) + chart/table data from the run history. */
-function computeAll(runs) {
-  const R = [...runs].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
-  const n = R.length
+function computeAll(runs, intervalMs = Infinity) {
   const now = Date.now()
+  const cutoffTime = now - intervalMs
+
+  // Filter runs by time interval
+  const R = [...runs]
+    .filter(r => Date.parse(r.startedAt) >= cutoffTime)
+    .sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))
+  const n = R.length
   const sumK = (k) => R.reduce((a, r) => a + (Number(r.kpis?.[k]) || 0), 0)
   const last = R[n - 1] || null
   const isGreen = (r) => r.stepsTotal > 0 && r.stepsOk === r.stepsTotal
@@ -181,6 +218,8 @@ export default function RunsDashboard() {
   const [error, setError] = useState('')
   const [selectedDay, setSelectedDay] = useState(null)
   const [dayStats, setDayStats] = useState(null)
+  const [selectedInterval, setSelectedInterval] = useState('24h')
+  const [filteredRuns, setFilteredRuns] = useState([])
 
   useEffect(() => {
     let alive = true
@@ -191,7 +230,12 @@ export default function RunsDashboard() {
     return () => { alive = false }
   }, [])
 
-  const data = useMemo(() => (runs && runs.length ? computeAll(runs) : null), [runs])
+  const intervalMs = useMemo(() => {
+    const preset = TIME_INTERVALS.find(t => t.id === selectedInterval)
+    return preset?.ms || Infinity
+  }, [selectedInterval])
+
+  const data = useMemo(() => (runs && runs.length ? computeAll(runs, intervalMs) : null), [runs, intervalMs])
 
   if (runs === null) return <div className="runs"><p className="runs__muted">Loading run history…</p></div>
   if (!runs.length) {
@@ -211,12 +255,48 @@ export default function RunsDashboard() {
   return (
     <div className="runs">
       <header className="runs__head">
-        <h1 className="runs__h1">Automation Runs</h1>
+        <div className="runs__head-top">
+          <h1 className="runs__h1">Automation Runs</h1>
+          <div className="runs__intervals">
+            {TIME_INTERVALS.map(interval => (
+              <button
+                key={interval.id}
+                className={`runs__interval-btn ${selectedInterval === interval.id ? 'runs__interval-btn--active' : ''}`}
+                onClick={() => setSelectedInterval(interval.id)}
+              >
+                {interval.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <p className="runs__sub">
           {data.sorted.length} runs · last {relTime(data.last?.startedAt)} on <code>{data.last?.instance || 'local'}</code> ·{' '}
           <strong style={{ color: ratioColor(data.stepRate) }}>{(data.stepRate * 100).toFixed(0)}%</strong> steps ok
         </p>
       </header>
+
+      {/* Quick access to hosted URLs by instance */}
+      {data.sorted.some(r => r.hostedUrl) && (
+        <section className="runs__panel runs__panel--urls">
+          <h2 className="runs__h2">🔗 Instance URLs</h2>
+          <div className="instance-urls">
+            {(() => {
+              const urlsByInstance = {}
+              for (const run of data.sorted) {
+                if (run.hostedUrl && !urlsByInstance[run.instance]) {
+                  urlsByInstance[run.instance] = run.hostedUrl
+                }
+              }
+              return Object.entries(urlsByInstance).map(([instance, url]) => (
+                <a key={instance} href={url} target="_blank" rel="noopener noreferrer" className="instance-url-btn">
+                  <span className="instance-url-label">{instance}</span>
+                  <span className="instance-url-icon">↗</span>
+                </a>
+              ))
+            })()}
+          </div>
+        </section>
+      )}
 
       {/* Calendar Heatmap Section */}
       <section className="runs__panel runs__panel--full">
@@ -242,6 +322,62 @@ export default function RunsDashboard() {
           />
         </section>
       )}
+
+      {/* Circuit Breaker Status */}
+      <section className="runs__panel runs__panel--full">
+        <CircuitBreakerStatus runs={data.sorted} />
+      </section>
+
+      {/* Error Classification Breakdown */}
+      <section className="runs__panel runs__panel--full">
+        <h2 className="runs__h2">Error Classification 🏷️</h2>
+        <ErrorClassification runs={data.sorted} />
+      </section>
+
+      {/* Step Performance Trends */}
+      <section className="runs__panel runs__panel--full">
+        <StepTrends runs={data.sorted} />
+      </section>
+
+      {/* TIER 2: Filters & Drill-down */}
+      <section className="runs__panel runs__panel--full">
+        <DashboardFilters runs={data.sorted} onFilter={setFilteredRuns} />
+      </section>
+
+      {/* TIER 2: Meter Coverage Matrix */}
+      <section className="runs__panel runs__panel--full">
+        <MeterCoverage runs={filteredRuns.length > 0 ? filteredRuns : data.sorted} />
+      </section>
+
+      {/* TIER 2: Instance Comparison */}
+      <section className="runs__panel runs__panel--full">
+        <InstanceComparison runs={filteredRuns.length > 0 ? filteredRuns : data.sorted} />
+      </section>
+
+      {/* TIER 2: Volume Trending */}
+      <section className="runs__panel runs__panel--full">
+        <VolumeTrending runs={filteredRuns.length > 0 ? filteredRuns : data.sorted} />
+      </section>
+
+      {/* TIER 3: Time-of-Day Heatmap */}
+      <section className="runs__panel runs__panel--full">
+        <TimeOfDayHeatmap runs={data.sorted} />
+      </section>
+
+      {/* TIER 3: Week-over-Week Comparison */}
+      <section className="runs__panel runs__panel--full">
+        <WeekOverWeekComparison runs={data.sorted} />
+      </section>
+
+      {/* TIER 3: Observability Metrics Dashboard */}
+      <section className="runs__panel runs__panel--full">
+        <ObservabilityMetrics runs={data.sorted} />
+      </section>
+
+      {/* TIER 3: Export & Reporting */}
+      <section className="runs__panel runs__panel--full">
+        <ExportReporting runs={data.sorted} data={data} />
+      </section>
 
       {data.groups.map((g) => (
         <section className="kgroup" key={g.title}>
@@ -280,7 +416,7 @@ export default function RunsDashboard() {
         <h2 className="runs__h2">Recent runs</h2>
         <div className="runs__tablewrap">
           <table className="runs__table">
-            <thead><tr><th>When</th><th>Mode</th><th>Instance</th><th>Steps</th><th>Created</th><th>Deleted</th><th>Localized</th><th>Published</th><th>Errors</th><th>Time</th></tr></thead>
+            <thead><tr><th>When</th><th>Mode</th><th>Instance</th><th>Site</th><th>Steps</th><th>Created</th><th>Deleted</th><th>Localized</th><th>Published</th><th>Errors</th><th>Time</th></tr></thead>
             <tbody>
               {[...data.sorted].reverse().slice(0, 25).map((r) => {
                 const ratio = r.stepsTotal ? r.stepsOk / r.stepsTotal : 0
@@ -289,6 +425,7 @@ export default function RunsDashboard() {
                     <td title={r.startedAt}>{relTime(r.startedAt)}</td>
                     <td>{r.mode}{r.dryRun ? ' (dry)' : ''}</td>
                     <td><code>{r.instance}</code></td>
+                    <td>{r.hostedUrl ? <a href={r.hostedUrl} target="_blank" rel="noopener noreferrer" className="runs__link">🔗 Visit</a> : '—'}</td>
                     <td><span style={{ color: ratioColor(ratio) }}>{r.stepsOk}/{r.stepsTotal}</span></td>
                     <td>{fmt(r.kpis?.created ?? '—')}</td>
                     <td>{fmt(r.kpis?.deleted ?? '—')}</td>

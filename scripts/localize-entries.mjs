@@ -42,6 +42,10 @@ import {
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -131,8 +135,9 @@ async function ensureLocalesExist(base, headers, targets, manifest) {
   return targets.filter((c) => existing.has(c))
 }
 
-async function localizeForContentType(base, headers, ctUid, targets, opts) {
+async function localizeForContentType(base, headers, ctUid, targets, opts, logger, metrics, cbManager) {
   const { maxPerCt, concurrency } = opts
+  const ctLogger = new StructuredLogger(`localize:${ctUid}`, { requestId: logger.requestId })
   const { ok, body } = await listEntries(base, headers, ctUid, {
     limit: maxPerCt,
     desc: 'created_at',
@@ -194,28 +199,65 @@ async function localizeForContentType(base, headers, ctUid, targets, opts) {
       if (DRY_RUN) {
         console.log(`    [dry-run] ${ctUid}/${entry.uid} → ${target}  "${title}"`)
         localized++
+        metrics.recordOperation('entry:localize', 'localize', 0, true)
         progress.tick({ ok: true })
         return
       }
-      const { ok: lOk, status, body: lBody } = await localizeEntry(base, headers, {
-        contentTypeUid: ctUid,
-        entryUid: entry.uid,
-        locale: target,
-        fields: { title },
-      })
-      if (lOk) {
-        localized++
-        progress.tick({ ok: true })
-      } else {
+
+      // Use RetryableOperation for smart retry on transient errors
+      const localizeOp = new RetryableOperation(
+        `localize:${ctUid}:${entry.uid}:${target}`,
+        async () => {
+          const result = await cbManager.executeWithBreaker(
+            'localizeEntry',
+            async () => {
+              return await localizeEntry(base, headers, {
+                contentTypeUid: ctUid,
+                entryUid: entry.uid,
+                locale: target,
+                fields: { title },
+              })
+            },
+            { failureThreshold: 10, timeout: 30000 },
+          )
+          return result
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 1000,
+          maxDelay: 5000,
+          logger: ctLogger,
+          metrics,
+        },
+      )
+
+      try {
+        const result = await localizeOp.execute()
+        const { ok: lOk, status, body: lBody } = result.result
+
+        if (lOk) {
+          localized++
+          metrics.recordOperation('entry:localize', 'localize', 0, true, { entryUid: entry.uid, locale: target })
+          progress.tick({ ok: true })
+        } else {
+          failed++
+          metrics.recordOperation('entry:localize', 'localize', 0, false, { entryUid: entry.uid, locale: target })
+          progress.tick({ ok: false })
+          const reason =
+            lBody?.error_message ||
+            (lBody?.errors && JSON.stringify(lBody.errors)) ||
+            JSON.stringify(lBody).slice(0, 160)
+          ctLogger.warn(`Localization failed after retries`, { entryUid: entry.uid, locale: target, status, reason })
+          console.warn(`    ✗ ${ctUid}/${entry.uid} → ${target} (${status}): ${reason}`)
+        }
+      } catch (error) {
         failed++
+        metrics.recordOperation('entry:localize', 'localize', 0, false, { entryUid: entry.uid, locale: target, error: error.message })
+        ctLogger.error(`Failed to localize entry after retries`, error, { entryUid: entry.uid, locale: target })
         progress.tick({ ok: false })
-        // Log the REAL reason for EVERY failure (no more silent 422-as-skip).
-        const reason =
-          lBody?.error_message ||
-          (lBody?.errors && JSON.stringify(lBody.errors)) ||
-          JSON.stringify(lBody).slice(0, 160)
-        console.warn(`    ✗ ${ctUid}/${entry.uid} → ${target} (${status}): ${reason}`)
+        console.warn(`    ✗ ${ctUid}/${entry.uid} → ${target}: ${error.message}`)
       }
+
       await sleep(50)
     },
     { concurrency },
@@ -225,6 +267,14 @@ async function localizeForContentType(base, headers, ctUid, targets, opts) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('localize-entries')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', {
+    apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…',
+  })
+
   const { apiKey, base, branch } = loadStackAuth()
   const tokens = loadManagementTokens()
   const headers = headersForToken(apiKey, tokens[0], branch)
@@ -290,6 +340,9 @@ async function main() {
       ctUid,
       validTargets,
       { maxPerCt, concurrency },
+      logger,
+      metrics,
+      cbManager,
     )
     totalL += localized
     totalA += already
@@ -310,12 +363,29 @@ async function main() {
   console.log(
     `\n✓ done — ${totalL} localized, ${totalA} already localized, ${totalF} failed`,
   )
+
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    totalLocalized: totalL,
+    totalAlready: totalA,
+    totalFailed: totalF,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned: totalL + totalF,
     actual: totalL,
     failed: totalF,
-    entryCountBefore,  // NEW: snapshot before localization
-    entryCountAfter,   // NEW: snapshot after localization
+    entryCountBefore,
+    entryCountAfter,
+    logTrail: logger.getLogTrail().slice(0, 5000),
     kpis: {
       localized: totalL,
       already: totalA,
@@ -323,6 +393,11 @@ async function main() {
       localeTargets: validTargets.length,
       totalBefore,
       totalAfter,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
     },
   })
   // Surface real failures (previously hidden as "skipped"): non-zero exit makes
@@ -331,6 +406,8 @@ async function main() {
 }
 
 main().catch((err) => {
+  const logger = new StructuredLogger('localize-entries')
+  logger.error('Script failed', err, { fatal: true })
   console.error('localize-entries failed:', err)
   process.exit(1)
 })

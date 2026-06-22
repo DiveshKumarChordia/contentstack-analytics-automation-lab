@@ -1,0 +1,115 @@
+.coverage {
+  margin-bottom: 32px;
+}
+
+.coverage__title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.coverage__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.meter-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meter-row__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.meter-row__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.meter-row__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.meter-row__badge--ok {
+  background: color-mix(in srgb, #22c55e 15%, transparent);
+  color: #22c55e;
+}
+
+.meter-row__badge--warn {
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+  color: #f59e0b;
+}
+
+.meter-row__dims {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+}
+
+.meter-dim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.meter-dim--ok {
+  border-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 5%, var(--bg));
+}
+
+.meter-dim--missing {
+  opacity: 0.6;
+}
+
+.meter-dim__icon {
+  font-size: 1.2rem;
+}
+
+.meter-dim__name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.meter-dim__count {
+  font-size: 0.65rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 600px) {
+  .coverage__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .meter-row__dims {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

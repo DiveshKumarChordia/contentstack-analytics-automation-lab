@@ -36,6 +36,10 @@ import {
   sleep,
 } from './lib/cma.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 function intEnv(name, dflt) {
   const v = optionalEnv(name)
@@ -62,7 +66,7 @@ async function getOrgMemberRoleUid(base, headers, orgUid) {
   return memberRole?.uid || null
 }
 
-async function inviteUsersViaAPI(base, headers, orgUid, count, emailDomain) {
+async function inviteUsersViaAPI(base, headers, orgUid, count, emailDomain, logger, metrics, cbManager) {
   const invited = []
   const failed = []
 
@@ -76,23 +80,49 @@ async function inviteUsersViaAPI(base, headers, orgUid, count, emailDomain) {
     const email = generateUniqueEmail(emailDomain)
     console.log(`Inviting user ${i + 1}/${count}: ${email}`)
 
+    // Use RetryableOperation for smart retry on transient errors
+    const inviteOp = new RetryableOperation(
+      `invite:${email}:${i}`,
+      async () => {
+        const result = await cbManager.executeWithBreaker(
+          'inviteUser',
+          async () => {
+            return await inviteUserToOrganization(base, headers, orgUid, {
+              emails: [email],
+              roles: { [email]: [memberRoleUid] },
+            })
+          },
+          { failureThreshold: 10, timeout: 30000 },
+        )
+        return result
+      },
+      {
+        maxAttempts: 3,
+        baseDelay: 1000,
+        maxDelay: 5000,
+        logger,
+        metrics,
+      },
+    )
+
     try {
-      // Invite to organization with member role
-      const { ok, body } = await inviteUserToOrganization(base, headers, orgUid, {
-        emails: [email],
-        roles: { [email]: [memberRoleUid] },
-      })
+      const result = await inviteOp.execute()
+      const { ok, body } = result.result
 
       if (!ok) {
         throw new Error(body?.message || body?.error || 'unknown error')
       }
 
       invited.push(email)
+      metrics.recordOperation('user:invite', 'invite', 0, true, { email })
+      logger.info(`User invited successfully`, { email, index: i })
       console.log(`  ✓ invited to org`)
 
       // Brief pause between invites
       await sleep(300)
     } catch (e) {
+      metrics.recordOperation('user:invite', 'invite', 0, false, { email, error: e.message })
+      logger.error(`Failed to invite user`, e, { email, index: i })
       console.error(`  ✗ Failed to invite ${email}: ${e.message}`)
       failed.push({ email, error: e.message })
     }
@@ -102,6 +132,14 @@ async function inviteUsersViaAPI(base, headers, orgUid, count, emailDomain) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('invite-users')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', {
+    apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…',
+  })
+
   const count = intEnv('CONTENTSTACK_INVITE_COUNT', 10)
   const emailDomain = optionalEnv('CONTENTSTACK_INVITE_EMAIL_DOMAIN', 'test.contentstack.com')
 
@@ -136,7 +174,7 @@ async function main() {
   console.log(`  org: ${orgUid}`)
 
   try {
-    const { invited, failed } = await inviteUsersViaAPI(base, userHeaders, orgUid, count, emailDomain)
+    const { invited, failed } = await inviteUsersViaAPI(base, userHeaders, orgUid, count, emailDomain, logger, metrics, cbManager)
 
     console.log(`\n✓ invited ${invited.length}/${count} users to organization`)
     if (failed.length > 0) {
@@ -147,17 +185,27 @@ async function main() {
     }
 
     // Auto-assign CMS roles to invited users
+    let rolesAssigned = 0
     if (invited.length > 0) {
       console.log(`\n🔐 assigning stack CMS roles to invited users...`)
-      let rolesAssigned = 0
 
       for (const invitedEmail of invited) {
-        const success = await ensureUserHasCMSRole(base, userHeaders, mgmtHeaders, invitedEmail)
-        if (success) {
-          rolesAssigned += 1
-          console.log(`  ✓ ${invitedEmail}`)
-        } else {
-          console.log(`  ⚠ ${invitedEmail} (manual CMS role assignment may be needed)`)
+        try {
+          const success = await ensureUserHasCMSRole(base, userHeaders, mgmtHeaders, invitedEmail)
+          if (success) {
+            rolesAssigned += 1
+            metrics.recordOperation('user:assign-role', 'assign-role', 0, true, { email: invitedEmail })
+            logger.info(`CMS role assigned`, { email: invitedEmail })
+            console.log(`  ✓ ${invitedEmail}`)
+          } else {
+            metrics.recordOperation('user:assign-role', 'assign-role', 0, false, { email: invitedEmail })
+            logger.warn(`Failed to assign CMS role`, { email: invitedEmail })
+            console.log(`  ⚠ ${invitedEmail} (manual CMS role assignment may be needed)`)
+          }
+        } catch (error) {
+          metrics.recordOperation('user:assign-role', 'assign-role', 0, false, { email: invitedEmail, error: error.message })
+          logger.error(`Error assigning CMS role`, error, { email: invitedEmail })
+          console.log(`  ⚠ ${invitedEmail} (error: ${error.message})`)
         }
         await sleep(200)
       }
@@ -165,17 +213,39 @@ async function main() {
       console.log(`  ${rolesAssigned}/${invited.length} CMS roles assigned`)
     }
 
+    const metricsSummary = metrics.getSummary()
+    const cbStatus = cbManager.getAllStatuses()
+
+    logger.info('Script completed successfully', {
+      invited: invited.length,
+      failed: failed.length,
+      rolesAssigned,
+      metricsSummary: {
+        operationCount: metricsSummary.operations.count,
+        operationSuccess: metricsSummary.operations.success,
+        operationFailure: metricsSummary.operations.failed,
+      },
+      circuitBreakerStatus: cbStatus,
+    })
+
     writeStepReport({
       planned: count,
       actual: invited.length,
       failed: failed.length,
+      logTrail: logger.getLogTrail().slice(0, 5000),
       kpis: {
         invited: invited.length,
         failed: failed.length,
-        rolesAssigned: invited.length,
+        rolesAssigned,
+        operationMetrics: {
+          totalOperations: metricsSummary.operations.count,
+          successRate: metricsSummary.operations.successRate,
+          avgDurationMs: metricsSummary.operations.avgMs,
+        },
       },
     })
   } catch (e) {
+    logger.error('Script failed', e, { fatal: true })
     console.error(`invite-users failed: ${e.message}`)
     writeStepReport({
       planned: count,
@@ -187,4 +257,9 @@ async function main() {
   }
 }
 
-main()
+main().catch((err) => {
+  const logger = new StructuredLogger('invite-users')
+  logger.error('Script failed', err, { fatal: true })
+  console.error('invite-users failed:', err)
+  process.exit(1)
+})

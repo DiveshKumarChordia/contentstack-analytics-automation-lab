@@ -1,0 +1,354 @@
+{
+  "content_types": [
+    {
+      "uid": "site",
+      "title": "Site",
+      "description": "Root entry for a hosted website (tech-news, world-news, etc.)",
+      "display_name_key": "site_name",
+      "fields": [
+        {
+          "uid": "site_id",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Site ID",
+          "mandatory": true,
+          "unique": true,
+          "description": "Unique identifier (tech-news, world-news, sports-news)"
+        },
+        {
+          "uid": "site_name",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Site Name",
+          "mandatory": true,
+          "description": "Display name (Tech Daily, World Weekly, Sports Hub)"
+        },
+        {
+          "uid": "site_url",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Site URL",
+          "mandatory": true,
+          "description": "Full domain (https://tech-daily.com)"
+        },
+        {
+          "uid": "description",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Site Description",
+          "description": "For SEO and social sharing"
+        },
+        {
+          "uid": "logo",
+          "field_type": "file",
+          "display_name": "Logo",
+          "description": "Site logo (PNG or SVG)"
+        },
+        {
+          "uid": "primary_color",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Primary Color",
+          "description": "Hex color (#6366f1)"
+        },
+        {
+          "uid": "secondary_color",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Secondary Color",
+          "description": "Hex color (#22c55e)"
+        },
+        {
+          "uid": "active",
+          "field_type": "boolean",
+          "display_name": "Active",
+          "description": "Is this site active?"
+        }
+      ]
+    },
+    {
+      "uid": "article",
+      "title": "Article",
+      "description": "News article - the core content type",
+      "display_name_key": "title",
+      "fields": [
+        {
+          "uid": "title",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Title",
+          "mandatory": true,
+          "description": "Article headline"
+        },
+        {
+          "uid": "slug",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "URL Slug",
+          "mandatory": true,
+          "unique": true,
+          "description": "URL-friendly title (auto-generated from title)"
+        },
+        {
+          "uid": "excerpt",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Excerpt",
+          "description": "Short summary for lists and feeds"
+        },
+        {
+          "uid": "body",
+          "field_type": "rich_text_editor",
+          "display_name": "Body",
+          "mandatory": true,
+          "description": "Full article content"
+        },
+        {
+          "uid": "featured_image",
+          "field_type": "file",
+          "display_name": "Featured Image",
+          "description": "Hero image for article"
+        },
+        {
+          "uid": "featured_image_credit",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Image Credit",
+          "description": "Photo credit attribution"
+        },
+        {
+          "uid": "site",
+          "field_type": "reference",
+          "content_type_uid": "site",
+          "display_name": "Site",
+          "mandatory": true,
+          "description": "Which site does this belong to"
+        },
+        {
+          "uid": "author",
+          "field_type": "reference",
+          "content_type_uid": "author",
+          "display_name": "Author",
+          "description": "Who wrote this article"
+        },
+        {
+          "uid": "categories",
+          "field_type": "reference",
+          "content_type_uid": "category",
+          "display_name": "Categories",
+          "multiple": true,
+          "description": "Primary and secondary categories"
+        },
+        {
+          "uid": "tags",
+          "field_type": "reference",
+          "content_type_uid": "tag",
+          "display_name": "Tags",
+          "multiple": true,
+          "description": "Topic tags"
+        },
+        {
+          "uid": "source_url",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Source URL",
+          "description": "Original article URL (if syndicated)"
+        },
+        {
+          "uid": "source_name",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Source Name",
+          "description": "Original publisher (Reuters, AP, BBC)"
+        },
+        {
+          "uid": "publish_date",
+          "field_type": "date",
+          "display_name": "Publish Date",
+          "mandatory": true,
+          "description": "When article was published"
+        },
+        {
+          "uid": "updated_date",
+          "field_type": "date",
+          "display_name": "Updated Date",
+          "description": "Last update time"
+        },
+        {
+          "uid": "status",
+          "field_type": "select",
+          "display_name": "Status",
+          "enum_values": ["draft", "review", "published", "archived"],
+          "mandatory": true,
+          "description": "Publication status"
+        },
+        {
+          "uid": "reading_time_minutes",
+          "field_type": "number",
+          "display_name": "Reading Time (minutes)",
+          "description": "Auto-calculated from body length"
+        },
+        {
+          "uid": "view_count",
+          "field_type": "number",
+          "display_name": "Views",
+          "description": "Article view count (updated by frontend)"
+        },
+        {
+          "uid": "seo_meta_description",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Meta Description",
+          "description": "SEO meta description (155 chars max)"
+        },
+        {
+          "uid": "seo_keywords",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "SEO Keywords",
+          "description": "Comma-separated keywords"
+        },
+        {
+          "uid": "is_featured",
+          "field_type": "boolean",
+          "display_name": "Featured on Homepage",
+          "description": "Show in homepage hero?"
+        },
+        {
+          "uid": "is_syndicated",
+          "field_type": "boolean",
+          "display_name": "Syndicated",
+          "description": "Did we fetch this from external source?"
+        }
+      ]
+    },
+    {
+      "uid": "author",
+      "title": "Author",
+      "description": "News article author",
+      "display_name_key": "name",
+      "fields": [
+        {
+          "uid": "name",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Name",
+          "mandatory": true
+        },
+        {
+          "uid": "slug",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "URL Slug",
+          "mandatory": true,
+          "unique": true
+        },
+        {
+          "uid": "bio",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Biography"
+        },
+        {
+          "uid": "avatar",
+          "field_type": "file",
+          "display_name": "Avatar"
+        },
+        {
+          "uid": "email",
+          "field_type": "text",
+          "data_type": "email",
+          "display_name": "Email"
+        },
+        {
+          "uid": "twitter",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Twitter Handle"
+        },
+        {
+          "uid": "verified",
+          "field_type": "boolean",
+          "display_name": "Verified Author"
+        }
+      ]
+    },
+    {
+      "uid": "category",
+      "title": "Category",
+      "description": "News section/category",
+      "display_name_key": "name",
+      "fields": [
+        {
+          "uid": "name",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Name",
+          "mandatory": true
+        },
+        {
+          "uid": "slug",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "URL Slug",
+          "mandatory": true,
+          "unique": true
+        },
+        {
+          "uid": "description",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Description"
+        },
+        {
+          "uid": "icon",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Icon/Emoji"
+        },
+        {
+          "uid": "color",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Color",
+          "description": "Hex color code"
+        },
+        {
+          "uid": "site",
+          "field_type": "reference",
+          "content_type_uid": "site",
+          "display_name": "Site"
+        }
+      ]
+    },
+    {
+      "uid": "tag",
+      "title": "Tag",
+      "description": "Article topic tag",
+      "display_name_key": "name",
+      "fields": [
+        {
+          "uid": "name",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "Name",
+          "mandatory": true
+        },
+        {
+          "uid": "slug",
+          "field_type": "text",
+          "data_type": "text",
+          "display_name": "URL Slug",
+          "mandatory": true,
+          "unique": true
+        },
+        {
+          "uid": "description",
+          "field_type": "textarea",
+          "data_type": "text",
+          "display_name": "Description"
+        }
+      ]
+    }
+  ]
+}

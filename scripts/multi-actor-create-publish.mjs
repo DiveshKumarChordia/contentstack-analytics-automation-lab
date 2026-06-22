@@ -43,6 +43,10 @@ import {
 } from './lib/cma.mjs'
 import { createProgress, runWithConcurrency } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 function intEnv(name, dflt) {
   const v = optionalEnv(name)
@@ -52,23 +56,37 @@ function intEnv(name, dflt) {
 async function pickAlternateUser(base, headers) {
   // Fetch all org users and pick a different one (deterministic: first non-current)
   try {
-    // Use the management API to list org members
-    const url = `${base}/organizations`
+    // Use the correct v3 org API endpoint to list organization members
+    const url = `${base}/v3/organizations`
     const resp = await fetch(url, { headers, method: 'GET' })
-    if (!resp.ok) return null
+    if (!resp.ok) {
+      console.warn(`  ⚠ /v3/organizations failed (${resp.status}) — will use single actor`)
+      return null
+    }
     const body = await resp.json()
     const org = body.organization
-    if (!org || !org.members) return null
+    if (!org || !Array.isArray(org.members)) return null
 
     // members is an array of user objects; pick the second one if available
     if (org.members.length < 2) return null
-    return org.members[1]
-  } catch {
+
+    const altUser = org.members.find((m, idx) => idx > 0)
+    return altUser || null
+  } catch (e) {
+    console.warn(`  ⚠ Failed to fetch org members — will use single actor: ${e.message}`)
     return null
   }
 }
 
 async function main() {
+  const logger = new StructuredLogger('multi-actor-create-publish')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
+  logger.info('Script started', {
+    apiKey: process.env.CONTENTSTACK_API_KEY?.slice(0, 10) + '…',
+  })
+
   const { apiKey, base, branch, locale, publishEnv } = loadStackAuth()
   const tokens = loadManagementTokens()
   const mgmt = (br) => headersForToken(apiKey, tokens[0], br)
@@ -153,17 +171,48 @@ async function main() {
 
     // PHASE 1: actor A creates entries
     for (let i = 0; i < entryCount; i += 1) {
-      const { ok, body: ebody } = await createEntry(base, mgmt(branch), ct.uid, {
-        title: `multi-actor ${Date.now().toString(36)}-${i}`,
-        single_line: `created by ${actorAUser?.email}`,
-      })
+      const createOp = new RetryableOperation(
+        `create:${ct.uid}:${i}`,
+        async () => {
+          const result = await cbManager.executeWithBreaker(
+            'createEntry',
+            async () => {
+              return await createEntry(base, mgmt(branch), ct.uid, {
+                title: `multi-actor ${Date.now().toString(36)}-${i}`,
+                single_line: `created by ${actorAUser?.email}`,
+              })
+            },
+            { failureThreshold: 10, timeout: 30000 },
+          )
+          return result
+        },
+        {
+          maxAttempts: 3,
+          baseDelay: 1000,
+          maxDelay: 5000,
+          logger,
+          metrics,
+        },
+      )
 
-      if (ok && ebody?.entry) {
-        entries.push(ebody.entry)
-        kpis.createdByA += 1
+      try {
+        const result = await createOp.execute()
+        const { ok, body: ebody } = result.result
+
+        if (ok && ebody?.entry) {
+          entries.push(ebody.entry)
+          kpis.createdByA += 1
+          metrics.recordOperation('entry:create', 'create', 0, true, { contentTypeUid: ct.uid, actor: 'A' })
+        } else {
+          metrics.recordOperation('entry:create', 'create', 0, false, { contentTypeUid: ct.uid, actor: 'A' })
+        }
+        progress.tick({ ok: ok && ebody?.entry })
+      } catch (error) {
+        logger.error(`Failed to create entry`, error, { contentTypeUid: ct.uid })
+        metrics.recordOperation('entry:create', 'create', 0, false, { contentTypeUid: ct.uid, error: error.message })
+        progress.tick({ ok: false })
       }
 
-      progress.tick({ ok })
       if ((i + 1) % 5 === 0) await sleep(100)
     }
 
@@ -173,20 +222,51 @@ async function main() {
     const toPublish = []
     if (approvedStage) {
       for (const e of entries) {
-        const { ok } = await transitionEntryWorkflow(base, actorAHeaders, {
-          contentTypeUid: ct.uid,
-          entryUid: e.uid,
-          stageUid: approvedStage.uid,
-          locale,
-          comment: 'auto: multi-actor transition',
-        })
+        const transitionOp = new RetryableOperation(
+          `transition:${ct.uid}:${e.uid}`,
+          async () => {
+            const result = await cbManager.executeWithBreaker(
+              'transitionEntry',
+              async () => {
+                return await transitionEntryWorkflow(base, actorAHeaders, {
+                  contentTypeUid: ct.uid,
+                  entryUid: e.uid,
+                  stageUid: approvedStage.uid,
+                  locale,
+                  comment: 'auto: multi-actor transition',
+                })
+              },
+              { failureThreshold: 10, timeout: 30000 },
+            )
+            return result
+          },
+          {
+            maxAttempts: 3,
+            baseDelay: 1000,
+            maxDelay: 5000,
+            logger,
+            metrics,
+          },
+        )
 
-        if (ok) {
-          kpis.transitionedByA += 1
-          toPublish.push(e)
+        try {
+          const result = await transitionOp.execute()
+          const { ok } = result.result
+
+          if (ok) {
+            kpis.transitionedByA += 1
+            toPublish.push(e)
+            metrics.recordOperation('entry:transition', 'transition', 0, true, { contentTypeUid: ct.uid, stageUid: approvedStage.uid })
+          } else {
+            metrics.recordOperation('entry:transition', 'transition', 0, false, { contentTypeUid: ct.uid })
+          }
+          progress.tick({ ok: false })
+        } catch (error) {
+          logger.error(`Failed to transition entry`, error, { contentTypeUid: ct.uid, entryUid: e.uid })
+          metrics.recordOperation('entry:transition', 'transition', 0, false, { error: error.message })
+          progress.tick({ ok: false })
         }
 
-        progress.tick({ ok: false }) // progress for non-publish transitions
         await sleep(50)
       }
       console.log(`  transitioned by A: ${toPublish.length}/${entries.length}`)
@@ -198,9 +278,43 @@ async function main() {
     await runWithConcurrency(
       toPublish,
       async (e) => {
-        const { ok } = await publishEntry(base, mgmt(branch), ct.uid, e.uid, locale, publishEnv, finalPublishHeaders)
-        if (ok) kpis.publishedByB += 1
-        progress.tick({ ok })
+        const publishOp = new RetryableOperation(
+          `publish:${ct.uid}:${e.uid}`,
+          async () => {
+            const result = await cbManager.executeWithBreaker(
+              'publishEntry',
+              async () => {
+                return await publishEntry(base, mgmt(branch), ct.uid, e.uid, locale, publishEnv, finalPublishHeaders)
+              },
+              { failureThreshold: 10, timeout: 30000 },
+            )
+            return result
+          },
+          {
+            maxAttempts: 3,
+            baseDelay: 1000,
+            maxDelay: 5000,
+            logger,
+            metrics,
+          },
+        )
+
+        try {
+          const result = await publishOp.execute()
+          const { ok } = result.result
+
+          if (ok) {
+            kpis.publishedByB += 1
+            metrics.recordOperation('entry:publish', 'publish', 0, true, { contentTypeUid: ct.uid, environment: publishEnv })
+          } else {
+            metrics.recordOperation('entry:publish', 'publish', 0, false, { contentTypeUid: ct.uid })
+          }
+          progress.tick({ ok })
+        } catch (error) {
+          logger.error(`Failed to publish entry`, error, { contentTypeUid: ct.uid, entryUid: e.uid })
+          metrics.recordOperation('entry:publish', 'publish', 0, false, { error: error.message })
+          progress.tick({ ok: false })
+        }
       },
       { concurrency },
     )
@@ -213,15 +327,40 @@ async function main() {
   console.log(`\n✓ multi-actor-create-publish done`)
   console.log(`  created by A: ${kpis.createdByA}, transitioned by A: ${kpis.transitionedByA}, published by B: ${kpis.publishedByB}`)
 
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    createdByA: kpis.createdByA,
+    transitionedByA: kpis.transitionedByA,
+    publishedByB: kpis.publishedByB,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned: cts.length * entryCount,
     actual: kpis.createdByA,
     failed: kpis.failed,
-    kpis,
+    logTrail: logger.getLogTrail().slice(0, 5000),
+    kpis: {
+      ...kpis,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
+    },
   })
 }
 
 main().catch((err) => {
+  const logger = new StructuredLogger('multi-actor-create-publish')
+  logger.error('Script failed', err, { fatal: true })
   console.error('multi-actor-create-publish failed:', err)
   process.exit(1)
 })

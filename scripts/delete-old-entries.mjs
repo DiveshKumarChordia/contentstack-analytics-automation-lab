@@ -46,6 +46,10 @@ import {
 } from './lib/cma.mjs'
 import { createProgress } from './lib/progress.mjs'
 import { writeStepReport } from './lib/report.mjs'
+import { StructuredLogger } from './lib/structured-logger.mjs'
+import { OperationMetrics } from './lib/operation-metrics.mjs'
+import { CircuitBreakerManager } from './lib/circuit-breaker.mjs'
+import { RetryableOperation } from './lib/retry-strategy.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -102,8 +106,9 @@ function bandQuery(band) {
 }
 
 /** Trim one content type's band down to `perCtCap`, deleting the oldest excess. */
-async function trimBand(base, headers, ctUid, locale, band, perCtCap, ctx) {
+async function trimBand(base, headers, ctUid, locale, band, perCtCap, ctx, logger, metrics, cbManager) {
   const query = bandQuery(band)
+  const bandLogger = new StructuredLogger(`trimBand:${ctUid}:${band.name}`, { requestId: logger.requestId })
 
   // 1. How many entries are in this band right now?
   const head = await listEntries(base, headers, ctUid, {
@@ -162,23 +167,54 @@ async function trimBand(base, headers, ctUid, locale, band, perCtCap, ctx) {
     skip += entries.length
   }
 
-  // 3. Delete them, concurrently.
+  // 3. Delete them, concurrently with retries.
   console.log(`  ${ctUid} [${band.name}]: ${count} in band, keep ${perCtCap} → deleting ${uids.length} oldest`)
   const progress = createProgress({ label: `${ctUid} [${band.name}]`, total: uids.length, everyN: 50 })
   let deleted = 0
   await poolForEach(uids, ctx.concurrency, async (uid) => {
     if (DRY_RUN) {
       deleted += 1
+      metrics.recordOperation('entry:delete', 'delete', 0, true)
       progress.tick({ ok: true })
       return
     }
-    const { ok } = await deleteEntry(base, headers, {
-      contentTypeUid: ctUid,
-      entryUid: uid,
-      locale,
-    })
-    if (ok) deleted += 1
-    progress.tick({ ok })
+
+    // Use RetryableOperation for smart retry with backoff
+    const deleteOp = new RetryableOperation(
+      `delete:${ctUid}:${uid}`,
+      async () => {
+        const start = Date.now()
+        const { ok } = await cbManager.executeWithBreaker(
+          'deleteEntry',
+          async () => {
+            return await deleteEntry(base, headers, {
+              contentTypeUid: ctUid,
+              entryUid: uid,
+              locale,
+            })
+          },
+          { failureThreshold: 10, timeout: 30000 },
+        )
+        return ok
+      },
+      {
+        maxAttempts: 3,
+        baseDelay: 1000,
+        maxDelay: 5000,
+        logger: bandLogger,
+        metrics,
+      },
+    )
+
+    try {
+      const success = await deleteOp.execute()
+      if (success.result) deleted += 1
+      progress.tick({ ok: success.result })
+    } catch (error) {
+      bandLogger.error(`Failed to delete entry after retries`, error, { entryUid: uid })
+      metrics.recordOperation('entry:delete', 'delete', 0, false, { entryUid: uid, error: error.message })
+      progress.tick({ ok: false })
+    }
   })
   progress.done()
   ctx.deletedTotal += deleted
@@ -186,9 +222,19 @@ async function trimBand(base, headers, ctUid, locale, band, perCtCap, ctx) {
 }
 
 async function main() {
+  const logger = new StructuredLogger('delete-old-entries')
+  const metrics = new OperationMetrics()
+  const cbManager = new CircuitBreakerManager({ logger, metrics })
+
   const { apiKey, base, branch, locale } = loadStackAuth()
   const tokens = loadManagementTokens()
   const headers = headersForToken(apiKey, tokens[0], branch)
+
+  logger.info('Script started', {
+    apiKey: apiKey.slice(0, 10) + '…',
+    branch: branch || '(none)',
+    dryRun: DRY_RUN,
+  })
 
   const contentTypes = csv(
     'CONTENTSTACK_DELETE_CONTENT_TYPES',
@@ -249,7 +295,7 @@ async function main() {
   for (const ctUid of contentTypes) {
     for (const band of bands) {
       const perCtCap = Math.ceil(band.cap / contentTypes.length)
-      const { count, deleted } = await trimBand(base, headers, ctUid, locale, band, perCtCap, ctx)
+      const { count, deleted } = await trimBand(base, headers, ctUid, locale, band, perCtCap, ctx, logger, metrics, cbManager)
       perBand[band.name].inBand += count
       perBand[band.name].deleted += deleted
     }
@@ -275,11 +321,25 @@ async function main() {
     console.log(`    (deferred ${ctx.deferred} to next run — per-run cap)`) // not silent: surfaced
   }
 
+  const metricsSummary = metrics.getSummary()
+  const cbStatus = cbManager.getAllStatuses()
+
+  logger.info('Script completed successfully', {
+    totalDeleted,
+    metricsSummary: {
+      operationCount: metricsSummary.operations.count,
+      operationSuccess: metricsSummary.operations.success,
+      operationFailure: metricsSummary.operations.failed,
+    },
+    circuitBreakerStatus: cbStatus,
+  })
+
   writeStepReport({
     planned: totalDeleted + ctx.deferred, // what we intended to remove this run
     actual: totalDeleted,
-    entryCountBefore,  // NEW: snapshot before tiered retention
-    entryCountAfter,   // NEW: snapshot after tiered retention
+    entryCountBefore,  // snapshot before tiered retention
+    entryCountAfter,   // snapshot after tiered retention
+    logTrail: logger.getLogTrail().slice(0, 5000), // Last 5000 chars of logs
     kpis: {
       deleted: totalDeleted,
       deferred: ctx.deferred,
@@ -288,11 +348,17 @@ async function main() {
       deleted7to15d: perBand[bands[2].name].deleted,
       totalBefore,
       totalAfter,
+      operationMetrics: {
+        totalOperations: metricsSummary.operations.count,
+        successRate: metricsSummary.operations.successRate,
+        avgDurationMs: metricsSummary.operations.avgMs,
+      },
     },
   })
 }
 
 main().catch((err) => {
-  console.error('delete-old-entries failed:', err)
+  const logger = new StructuredLogger('delete-old-entries')
+  logger.error('Script failed', err, { fatal: true })
   process.exit(1)
 })

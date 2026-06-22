@@ -112,35 +112,51 @@ jobs:
           CONTENTSTACK_CHURN_CASES: ${{ secrets.CONTENTSTACK_CHURN_CASES || vars.CONTENTSTACK_CHURN_CASES }}
           # Labels the run record in public/run-history.json (the /runs dashboard).
           INSTANCE: ${{ matrix.instance }}
+          # Hosted site URL for this environment (clickable link in /runs dashboard)
+          LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
         run: npm run automate:drive:ci -- --mode ${{ github.event.inputs.mode || 'periodic' }}
 
       # Persist the run record so the /runs dashboard can aggregate across runs.
       # Commits public/run-history.json back to the SAME branch. The periodic
       # workflow is cron-only (not on:push), so this commit never re-triggers it.
-      # Single-instance is race-free; for multiple matrix instances the rebase
-      # retry below resolves the common case (switch to per-instance files if you
-      # run many instances and see conflicts).
+      # Uses safe-append-run-history.mjs to handle race conditions and automatically
+      # clean up any merge conflict markers that might have been committed by
+      # previous runs. This ensures JSON integrity even with concurrent matrix jobs.
       - name: Commit run history
         if: always() && github.ref == 'refs/heads/main'
         run: |
           set -e
-          if [ -z "$(git status --porcelain public/run-history.json)" ]; then
-            echo "no run-history change"; exit 0
+          # Export run data from the previous step (npm run automate:drive:ci writes to .run-record.json)
+          if [ ! -f .run-record.json ]; then
+            echo "no run record to commit"; exit 0
           fi
+
+          # Pull latest to ensure we have the latest version (might have conflict markers)
+          git pull origin "${GITHUB_REF_NAME}" || true
+
+          # Safely append the run record (auto-cleans conflict markers, validates JSON)
+          node scripts/safe-append-run-history.mjs .run-record.json
+
+          # Commit if there are changes
+          if [ -z "$(git status --porcelain public/run-history.json)" ]; then
+            echo "no changes to commit"; exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/run-history.json
+          git commit -m "chore(run-data): append run ${GITHUB_RUN_ID} [skip ci]"
+
+          # Retry push up to 5 times (handles race between pull and push)
           for attempt in 1 2 3 4 5; do
-            git stash --include-untracked -- public/run-history.json || true
-            git pull --rebase origin "${GITHUB_REF_NAME}" || true
-            git stash pop || true
-            git add public/run-history.json
-            git commit -m "chore(run-data): append run ${GITHUB_RUN_ID} [skip ci]" || { echo "nothing to commit"; exit 0; }
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              echo "pushed run history (attempt $attempt)"; exit 0
+              echo "✓ pushed run history (attempt $attempt)"; exit 0
             fi
-            echo "push raced — retrying ($attempt)"; git reset --soft HEAD~1
+            echo "push raced — retrying ($attempt/5)";
+            git pull origin "${GITHUB_REF_NAME}" || true
+            git rebase HEAD~1 || git rebase --abort
           done
-          echo "::warning::could not push run history after retries (non-fatal)"
+          echo "::warning::could not push run history after retries (non-fatal, but run data may not appear in dashboard)"
 
       - name: Warm Launch per-entry page URLs
         if: success()

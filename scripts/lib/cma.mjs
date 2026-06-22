@@ -506,7 +506,9 @@ export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
     // A 401 is only worth retrying on the TOTP path (a fresh code may pass);
     // a manual TFA token that 401s is simply wrong/expired.
     const rolloverAuth = !!totpSecret && result.status === 401
-    if (attempt < maxAttempts && (transient || rolloverAuth)) {
+    // 422 with TOTP secret means "code already used" — retry with next code window
+    const totpConflict = !!totpSecret && result.status === 422
+    if (attempt < maxAttempts && (transient || rolloverAuth || totpConflict)) {
       const wait = transient ? 1500 * attempt : 900 // linear backoff for 5xx/429
       console.warn(
         `  ⚠ /v3/user-session attempt ${attempt}/${maxAttempts} failed (${result.status}) — retrying in ${Math.round(wait / 100) / 10}s`,

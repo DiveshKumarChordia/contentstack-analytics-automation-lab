@@ -1,0 +1,141 @@
+.error-class {
+  --transient: #3b82f6;
+  --permanent: #ef4444;
+  --unknown: #8b5cf6;
+}
+
+.error-class__none {
+  color: var(--muted);
+  text-align: center;
+  padding: 20px;
+  margin: 0;
+}
+
+.error-class__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.error-class__card {
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--card);
+  text-align: center;
+}
+
+.error-class__card--transient {
+  border-left: 4px solid var(--transient);
+}
+
+.error-class__card--permanent {
+  border-left: 4px solid var(--permanent);
+}
+
+.error-class__card--unknown {
+  border-left: 4px solid var(--unknown);
+}
+
+.error-class__icon {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+}
+
+.error-class__count {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.error-class__card--transient .error-class__count {
+  color: var(--transient);
+}
+
+.error-class__card--permanent .error-class__count {
+  color: var(--permanent);
+}
+
+.error-class__card--unknown .error-class__count {
+  color: var(--unknown);
+}
+
+.error-class__label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.error-class__status {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.error-class__examples {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+
+.error-class__example {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 3px 0;
+  line-height: 1.3;
+  word-break: break-all;
+}
+
+/* Distribution bar */
+.error-class__summary {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.error-class__bar {
+  display: flex;
+  height: 24px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.error-class__bar-segment {
+  transition: opacity 0.2s;
+  min-width: 2px;
+}
+
+.error-class__bar-segment:hover {
+  opacity: 0.8;
+}
+
+.error-class__bar-segment--transient {
+  background: var(--transient);
+}
+
+.error-class__bar-segment--permanent {
+  background: var(--permanent);
+}
+
+.error-class__bar-segment--unknown {
+  background: var(--unknown);
+}
+
+.error-class__total {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .error-class__grid {
+    grid-template-columns: 1fr;
+  }
+}

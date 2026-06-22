@@ -125,6 +125,12 @@ async function periodicPhase() {
       CONTENTSTACK_MANIFEST_SKIP_SEEDS: 'true',
     }),
   )
+  // 0b. Fetch real news from NewsAPI + RSS feeds (if enabled and API key set)
+  if (process.env.NEWS_API_KEY) {
+    results.push(
+      await runStep('fetch real news entries', 'fetch-news-entries.mjs', []),
+    )
+  }
   // 1. Tiered retention — trim each age band to its target population (keeps the
   //    org under its entry cap and drives entry_deleted meter events). Runs first
   //    so the create step has headroom.
@@ -172,7 +178,7 @@ async function periodicPhase() {
 
 // ── Run-report assembly ──────────────────────────────────────────────────────
 
-/** Flatten per-step reports into one run record + aggregate KPIs + error audit. */
+/** Flatten per-step reports into one run record + aggregate KPIs + error audit + observability. */
 function buildRecord(results, startedAt, finishedAt) {
   const steps = results.map((r) => ({
     name: r.name,
@@ -187,13 +193,19 @@ function buildRecord(results, startedAt, finishedAt) {
     entryCountBefore: r.report?.entryCountBefore ?? {},
     entryCountAfter: r.report?.entryCountAfter ?? {},
     logTrail: r.report?.logTrail ?? null,
+    operationMetrics: r.report?.operationMetrics ?? null,
+    circuitBreakerStatus: r.report?.circuitBreakerStatus ?? [],
   }))
+
   const kpis = {}
   for (const s of steps) {
     for (const [k, v] of Object.entries(s.kpis)) {
-      if (typeof v === 'number') kpis[k] = (kpis[k] || 0) + v
+      if (typeof v === 'number' && !k.startsWith('operationMetrics')) {
+        kpis[k] = (kpis[k] || 0) + v
+      }
     }
   }
+
   const errors = []
   const validationWarnings = []
   for (const s of steps) {
@@ -208,11 +220,54 @@ function buildRecord(results, startedAt, finishedAt) {
       validationWarnings.push({ step: s.name, message: s.validation.message })
     }
   }
+
+  // Aggregate observability metrics across all steps
+  const aggregatedMetrics = {
+    totalOperations: 0,
+    successfulOperations: 0,
+    failedOperations: 0,
+    avgSuccessRate: 0,
+    avgLatencyMs: 0,
+    circuitBreakersOpen: 0,
+    circuitBreakersByStep: {},
+  }
+
+  let successRateSum = 0
+  let latencySum = 0
+  let metricsCount = 0
+
+  for (const s of steps) {
+    if (s.operationMetrics) {
+      aggregatedMetrics.totalOperations += s.operationMetrics.totalOperations || 0
+      aggregatedMetrics.successfulOperations += s.operationMetrics.totalOperations
+        ? Math.round((s.operationMetrics.successRate / 100) * s.operationMetrics.totalOperations)
+        : 0
+      aggregatedMetrics.failedOperations += s.operationMetrics.totalOperations
+        ? s.operationMetrics.totalOperations - Math.round((s.operationMetrics.successRate / 100) * s.operationMetrics.totalOperations)
+        : 0
+      successRateSum += s.operationMetrics.successRate || 0
+      latencySum += s.operationMetrics.avgDurationMs || 0
+      metricsCount += 1
+    }
+    if (s.circuitBreakerStatus && s.circuitBreakerStatus.length) {
+      aggregatedMetrics.circuitBreakersByStep[s.name] = s.circuitBreakerStatus
+      for (const cb of s.circuitBreakerStatus) {
+        if (cb.state === 'open') aggregatedMetrics.circuitBreakersOpen += 1
+      }
+    }
+  }
+
+  if (metricsCount > 0) {
+    aggregatedMetrics.avgSuccessRate = Math.round(successRateSum / metricsCount)
+    aggregatedMetrics.avgLatencyMs = Math.round(latencySum / metricsCount)
+  }
+
   const stepsOk = steps.filter((s) => s.ok).length
   return {
     runId: process.env.GITHUB_RUN_ID || `local-${startedAt}`,
     runNumber: process.env.GITHUB_RUN_NUMBER ? Number(process.env.GITHUB_RUN_NUMBER) : null,
     instance: process.env.INSTANCE || 'local',
+    hostedUrl: process.env.LAUNCH_SITE_URL || null,
     mode: MODE,
     dryRun: DRY_RUN,
     startedAt,
@@ -224,6 +279,7 @@ function buildRecord(results, startedAt, finishedAt) {
     steps,
     errors,
     validationWarnings,
+    observability: aggregatedMetrics,
   }
 }
 
@@ -237,6 +293,14 @@ function renderMarkdown(rec) {
     `**${rec.stepsOk}/${rec.stepsTotal} steps ok** · ${(rec.durationMs / 1000).toFixed(1)}s · ` +
       `instance \`${rec.instance}\` · run \`${rec.runId}\``,
   )
+
+  // Add hosted URL if available
+  if (rec.hostedUrl) {
+    L.push('')
+    L.push(`### 🔗 Deployed Site`)
+    L.push(`[Visit **${rec.instance}**](${rec.hostedUrl})`)
+  }
+
   L.push('')
   const kpiEntries = Object.entries(rec.kpis)
   if (kpiEntries.length) {
@@ -288,6 +352,21 @@ function renderMarkdown(rec) {
         }
       }
     }
+    L.push('')
+  }
+
+  // Add observability metrics section
+  if (rec.observability) {
+    const obs = rec.observability
+    L.push('### 📊 Observability metrics')
+    L.push('| Metric | Value |')
+    L.push('|---|---|')
+    L.push(`| Total operations | ${obs.totalOperations} |`)
+    L.push(`| Successful | ${obs.successfulOperations} |`)
+    L.push(`| Failed | ${obs.failedOperations} |`)
+    L.push(`| Success rate | ${obs.avgSuccessRate}% |`)
+    L.push(`| Avg latency | ${obs.avgLatencyMs}ms |`)
+    L.push(`| Circuit breakers open | ${obs.circuitBreakersOpen} |`)
     L.push('')
   }
 
