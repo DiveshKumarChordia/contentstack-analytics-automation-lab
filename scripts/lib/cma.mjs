@@ -185,12 +185,8 @@ export async function listContentTypes(base, headers, { limit = 100, includeCoun
 /** DELETE /v3/content_types/{uid}. force=true also removes its entries. */
 export async function deleteContentType(base, headers, uid, { force = true } = {}) {
   const q = force ? '?force=true' : ''
-  const res = await fetch(`${base}/v3/content_types/${uid}${q}`, {
-    method: 'DELETE',
-    headers,
-  })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  const url = `${base}/v3/content_types/${uid}${q}`
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete content type ${uid}` })
 }
 
 export async function createEntry(base, headers, contentTypeUid, entryFields, locale) {
@@ -773,12 +769,8 @@ export async function createPublishingRule(
 
 /** DELETE /v3/workflows/publishing_rules/{uid}. */
 export async function deletePublishingRule(base, headers, ruleUid) {
-  const res = await fetch(`${base}/v3/workflows/publishing_rules/${ruleUid}`, {
-    method: 'DELETE',
-    headers,
-  })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  const url = `${base}/v3/workflows/publishing_rules/${ruleUid}`
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete publishing rule ${ruleUid}` })
 }
 
 // =============================================================================
@@ -823,9 +815,7 @@ export async function createLocale(base, headers, { code, name, fallbackLocale }
  */
 export async function deleteLocale(base, headers, code) {
   const url = `${base}/v3/locales/${encodeURIComponent(code)}`
-  const res = await fetch(url, { method: 'DELETE', headers })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete locale ${code}` })
 }
 
 /**
@@ -840,13 +830,8 @@ export async function deleteLocale(base, headers, code) {
  */
 export async function localizeEntry(base, headers, { contentTypeUid, entryUid, locale, fields }) {
   const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}?locale=${encodeURIComponent(locale)}`
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ entry: fields }),
-  })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  const bodyStr = JSON.stringify({ entry: fields })
+  return fetchWithLogging(url, { method: 'PUT', headers, body: bodyStr }, { maxRetries: 3, logPrefix: `Localize entry ${contentTypeUid}/${entryUid}/${locale}` })
 }
 
 /**
@@ -981,9 +966,7 @@ export async function bulkUnpublish(base, headers, opts) {
 export async function deleteEntry(base, headers, { contentTypeUid, entryUid, locale }) {
   const q = locale ? `?locale=${encodeURIComponent(locale)}` : ''
   const url = `${base}/v3/content_types/${contentTypeUid}/entries/${entryUid}${q}`
-  const res = await fetch(url, { method: 'DELETE', headers })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete entry ${contentTypeUid}/${entryUid}` })
 }
 
 // =============================================================================
@@ -1036,18 +1019,14 @@ export async function updateWorkflow(base, headers, workflowUid, workflow) {
 /** DELETE a workflow (terminal — orphans its in-workflow entries' `_workflow`). */
 export async function deleteWorkflow(base, headers, workflowUid) {
   const url = `${base}/v3/workflows/${workflowUid}`
-  const res = await fetch(url, { method: 'DELETE', headers })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete workflow ${workflowUid}` })
 }
 
 /** DELETE a branch (async, terminal). Orphans entries that still list it in
  *  `_branches`. POST returns a job; the branch is gone once it settles. */
 export async function deleteBranch(base, headers, branchUid) {
   const url = `${base}/v3/stacks/branches/${encodeURIComponent(branchUid)}`
-  const res = await fetch(url, { method: 'DELETE', headers })
-  const body = await res.json().catch(() => ({}))
-  return { ok: res.ok, status: res.status, body }
+  return fetchWithLogging(url, { method: 'DELETE', headers }, { maxRetries: 3, logPrefix: `Delete branch ${branchUid}` })
 }
 
 // =============================================================================

@@ -126,7 +126,7 @@ async function transitionEntriesForWorkflow(base, headers, transitHeaders, workf
   }
 
   const weights = resolvePatternWeights(policy)
-  const concurrency = parseInt(optionalEnv('CONTENTSTACK_TRANSITION_CONCURRENCY', '8'), 10)
+  const concurrency = parseInt(optionalEnv('CONTENTSTACK_TRANSITION_CONCURRENCY', '4'), 10)
   const perCallSleepMs = parseInt(optionalEnv('CONTENTSTACK_TRANSITION_SLEEP_MS', '50'), 10)
   const perEntryMax = policy.perEntryMaxStages ?? 99 // legacy cap
   // Cap entries-per-CT-per-run so we don't waste API calls re-transitioning

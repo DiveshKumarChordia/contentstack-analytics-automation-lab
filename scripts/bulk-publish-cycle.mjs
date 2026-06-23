@@ -274,7 +274,7 @@ async function main() {
       : await tryLoadUserSessionHeaders(base, apiKey, branch)
     const transitionConc = Math.max(
       1,
-      parseInt(optionalEnv('CONTENTSTACK_PUBLISH_TRANSITION_CONCURRENCY', '6'), 10),
+      parseInt(optionalEnv('CONTENTSTACK_PUBLISH_TRANSITION_CONCURRENCY', '4'), 10),
     )
     if (DRY_RUN) {
       console.log(`\n→ [dry-run] would transition ${toPublish.length} entries to their approved stage`)

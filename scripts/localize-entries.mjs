@@ -17,7 +17,7 @@
  * Env knobs:
  *   CONTENTSTACK_LOCALIZE_TARGETS         — CSV; default fr-fr,de-de,en-gb
  *   CONTENTSTACK_LOCALIZE_MAX_PER_CT      — newest N entries per CT (default 10)
- *   CONTENTSTACK_LOCALIZE_CONCURRENCY     — parallel PUTs (default 6)
+ *   CONTENTSTACK_LOCALIZE_CONCURRENCY     — parallel PUTs (default 4)
  *   CONTENTSTACK_LOCALIZE_CONTENT_TYPES   — CSV; default = content-types manifest
  *
  * Usage:
@@ -285,7 +285,7 @@ async function main() {
     deriveContentTypesFromManifest(),
   )
   const maxPerCt = parseInt(optionalEnv('CONTENTSTACK_LOCALIZE_MAX_PER_CT', '10'), 10)
-  const concurrency = parseInt(optionalEnv('CONTENTSTACK_LOCALIZE_CONCURRENCY', '6'), 10)
+  const concurrency = parseInt(optionalEnv('CONTENTSTACK_LOCALIZE_CONCURRENCY', '4'), 10)
 
   if (contentTypes.length === 0) {
     console.error('No content types. Set CONTENTSTACK_LOCALIZE_CONTENT_TYPES.')

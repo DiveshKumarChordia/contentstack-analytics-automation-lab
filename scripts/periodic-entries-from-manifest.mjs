@@ -47,7 +47,7 @@ import { RetryableOperation } from './lib/retry-strategy.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 const DEFAULT_TOTAL = 10000
-const DEFAULT_CONCURRENCY = 12
+const DEFAULT_CONCURRENCY = 6
 
 async function loadManifest(manifestPath) {
   const raw = await readFile(manifestPath, 'utf8')

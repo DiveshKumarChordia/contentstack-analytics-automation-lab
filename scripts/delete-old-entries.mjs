@@ -261,7 +261,7 @@ async function main() {
   ]
 
   const ctx = {
-    concurrency: intEnv('CONTENTSTACK_DELETE_CONCURRENCY', 10),
+    concurrency: intEnv('CONTENTSTACK_DELETE_CONCURRENCY', 5),
     // Bound per-run work so a large backlog drains over several cron runs instead
     // of one multi-hour job that overruns the 5-min schedule. Set 0 = unlimited.
     maxPerRun: intEnv('CONTENTSTACK_DELETE_MAX_PER_RUN', 6000),

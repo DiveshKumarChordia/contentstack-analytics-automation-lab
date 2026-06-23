@@ -54,7 +54,7 @@ async function main() {
   const mgmt = (br) => headersForToken(apiKey, tokens[0], br)
 
   const entryCount = intEnv('CONTENTSTACK_PERMANENT_DELETE_COUNT', 15)
-  const concurrency = intEnv('CONTENTSTACK_PERMANENT_DELETE_CONCURRENCY', 5)
+  const concurrency = intEnv('CONTENTSTACK_PERMANENT_DELETE_CONCURRENCY', 3)
 
   console.log('permanent-deletes')
   console.log(`  stack: api_key=${apiKey.slice(0, 10)}…  branch=${branch || '(none)'}`)
