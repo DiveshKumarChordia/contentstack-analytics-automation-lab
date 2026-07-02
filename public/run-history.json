@@ -40,12 +40,21 @@
     "stepsOk": 10,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
     "instance": "cs-dev11-a",
     "mode": "periodic",
     "dryRun": false,
     "startedAt": "2026-07-02T20:11:11.008Z",
     "finishedAt": "2026-07-02T20:12:38.353Z",
     "durationMs": 87345,
+=======
+    "instance": "cs-dev11-b",
+    "mode": "periodic",
+    "dryRun": false,
+    "startedAt": "2026-07-02T20:11:11.676Z",
+    "finishedAt": "2026-07-02T20:12:38.676Z",
+    "durationMs": 87000,
+>>>>>>> Stashed changes
     "stepsOk": 12,
 >>>>>>> Stashed changes
     "stepsTotal": 16,
@@ -101,6 +110,8 @@
       "publishFailed": 0,
       "transitioned": 0,
       "transitionFailed": 0,
+      "transitions": 0,
+      "transitionsSkipped": 0,
       "casesOk": 1,
       "casesFailed": 5,
       "churnLocale": 1,
@@ -111,7 +122,6 @@
       "dynCtEntries": 0,
       "workflowBranchAdds": 0,
       "secondWaveEntries": 0,
-      "transitions": 0,
       "publishRules": 0,
       "branchesDeleted": 0,
       "ctsDeleted": 0,
@@ -162,7 +172,11 @@
         "ms": 1132,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 2385,
+=======
+        "ms": 2316,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -188,7 +202,11 @@
         "ms": 2813,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 3818,
+=======
+        "ms": 3258,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -220,7 +238,11 @@
         "ms": 1243,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 1405,
+=======
+        "ms": 1374,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -260,7 +282,11 @@
 =======
         "ms": 2890,
 =======
+<<<<<<< Updated upstream
         "ms": 3638,
+=======
+        "ms": 3259,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 100,
         "actual": 100,
@@ -316,7 +342,11 @@
 =======
         "ms": 10232,
 =======
+<<<<<<< Updated upstream
         "ms": 13045,
+=======
+        "ms": 13043,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 250,
         "actual": 250,
@@ -363,7 +393,11 @@
         "ms": 3340,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 3137,
+=======
+        "ms": 3253,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -401,6 +435,16 @@
         "actual": null,
         "failed": 0,
         "kpis": {},
+=======
+        "ms": 1555,
+        "planned": 0,
+        "actual": 0,
+        "failed": 0,
+        "kpis": {
+          "transitions": 0,
+          "transitionsSkipped": 0
+        },
+>>>>>>> Stashed changes
         "errors": []
       },
       {
@@ -421,7 +465,11 @@
         "ms": 4465,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 4226,
+=======
+        "ms": 4322,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 6,
         "actual": 1,
@@ -445,7 +493,11 @@
             "message": "Churn $all 260619143208 (off 422, on 422)"
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
             "message": "Churn $all 260627115648 (off 422, on 422)"
+=======
+            "message": "Churn $all 260627115630 (off 422, on 422)"
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
           },
           {
@@ -481,7 +533,11 @@
           },
           {
             "label": "entry delete→restore",
+<<<<<<< Updated upstream
             "message": "demo_plain_text/blt98cb3dfe609c3efb (delete 200, restore 422)"
+=======
+            "message": "demo_plain_text/blta66a2346bb24b0da (delete 200, restore 422)"
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
           }
         ]
@@ -504,7 +560,11 @@
         "ms": 582,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 871,
+=======
+        "ms": 771,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 30,
         "actual": 0,
@@ -564,7 +624,11 @@
           "editedPostPublish": 14,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 25426,
+=======
+        "ms": 25754,
+>>>>>>> Stashed changes
         "planned": 50,
         "actual": 50,
         "failed": 0,
@@ -609,7 +673,11 @@
           "created": 14,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 18786,
+=======
+        "ms": 18934,
+>>>>>>> Stashed changes
         "planned": 75,
         "actual": 75,
         "failed": 0,
@@ -655,7 +723,11 @@
         },
 =======
         "ok": false,
+<<<<<<< Updated upstream
         "ms": 2166,
+=======
+        "ms": 2307,
+>>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
         "failed": 1,
@@ -690,7 +762,11 @@
         "ms": 3730,
 =======
         "ok": true,
+<<<<<<< Updated upstream
         "ms": 5180,
+=======
+        "ms": 5223,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 25,
         "actual": 25,
@@ -726,7 +802,11 @@
         "ms": 37,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 545,
+=======
+        "ms": 538,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 10,
         "actual": 0,
@@ -752,7 +832,11 @@
         "ms": 582,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 574,
+=======
+        "ms": 542,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": 15,
         "actual": 0,
@@ -785,7 +869,11 @@
         "ms": 39,
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "ms": 557,
+=======
+        "ms": 539,
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -823,7 +911,11 @@
 =======
         "step": "churn orphan cases",
         "label": "disable→enable",
+<<<<<<< Updated upstream
         "message": "Churn $all 260627115648 (off 422, on 422)"
+=======
+        "message": "Churn $all 260627115630 (off 422, on 422)"
+>>>>>>> Stashed changes
 >>>>>>> Stashed changes
       },
       {
@@ -875,7 +967,11 @@
 =======
 >>>>>>> Stashed changes
 =======
+<<<<<<< Updated upstream
         "message": "demo_plain_text/blt98cb3dfe609c3efb (delete 200, restore 422)"
+=======
+        "message": "demo_plain_text/blta66a2346bb24b0da (delete 200, restore 422)"
+>>>>>>> Stashed changes
       },
       {
         "step": "aged stalls (stalled_by_stage)",
