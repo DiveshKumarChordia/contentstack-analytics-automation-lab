@@ -3,6 +3,7 @@
     "runId": "28758631771",
     "runNumber": 1399,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     "instance": "cs-dev22-sso",
     "mode": "periodic",
     "dryRun": false,
@@ -16,6 +17,14 @@
     "startedAt": "2026-07-05T23:30:02.480Z",
     "finishedAt": "2026-07-05T23:30:09.380Z",
     "durationMs": 6900,
+>>>>>>> Stashed changes
+=======
+    "instance": "default",
+    "mode": "periodic",
+    "dryRun": false,
+    "startedAt": "2026-07-05T23:30:00.544Z",
+    "finishedAt": "2026-07-05T23:30:15.749Z",
+    "durationMs": 15205,
 >>>>>>> Stashed changes
     "stepsOk": 6,
     "stepsTotal": 16,
@@ -61,9 +70,13 @@
         "name": "ensure content types",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 781,
 =======
         "ms": 1084,
+>>>>>>> Stashed changes
+=======
+        "ms": 1116,
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -75,9 +88,13 @@
         "name": "delete old entries",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 1289,
 =======
         "ms": 925,
+>>>>>>> Stashed changes
+=======
+        "ms": 3011,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -95,9 +112,13 @@
         "name": "backfill aged entries",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 556,
 =======
         "ms": 569,
+>>>>>>> Stashed changes
+=======
+        "ms": 928,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -125,9 +146,13 @@
         "name": "periodic entries from manifest",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 634,
 =======
         "ms": 607,
+>>>>>>> Stashed changes
+=======
+        "ms": 1633,
 >>>>>>> Stashed changes
         "planned": 100,
         "actual": 0,
@@ -143,9 +168,13 @@
         "name": "localize entries",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 356,
 =======
         "ms": 398,
+>>>>>>> Stashed changes
+=======
+        "ms": 1146,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -162,9 +191,13 @@
         "name": "bulk publish cycle",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 333,
 =======
         "ms": 352,
+>>>>>>> Stashed changes
+=======
+        "ms": 1043,
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -176,9 +209,13 @@
         "name": "workflow transitions on existing entries",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 390,
 =======
         "ms": 357,
+>>>>>>> Stashed changes
+=======
+        "ms": 1017,
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -190,9 +227,13 @@
         "name": "churn orphan cases",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 905,
 =======
         "ms": 903,
+>>>>>>> Stashed changes
+=======
+        "ms": 1872,
 >>>>>>> Stashed changes
         "planned": 6,
         "actual": 0,
@@ -232,9 +273,13 @@
         "name": "branch lifecycle",
         "ok": true,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 279,
 =======
         "ms": 267,
+>>>>>>> Stashed changes
+=======
+        "ms": 546,
 >>>>>>> Stashed changes
         "planned": 30,
         "actual": 0,
@@ -259,7 +304,11 @@
       {
         "name": "edit after publish (entries_in_progress)",
         "ok": false,
+<<<<<<< Updated upstream
         "ms": 267,
+=======
+        "ms": 513,
+>>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
         "failed": 1,
@@ -270,9 +319,13 @@
         "name": "permanent deletes (entries_deleted)",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 272,
 =======
         "ms": 268,
+>>>>>>> Stashed changes
+=======
+        "ms": 500,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -284,9 +337,13 @@
         "name": "aged stalls (stalled_by_stage)",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 273,
 =======
         "ms": 287,
+>>>>>>> Stashed changes
+=======
+        "ms": 789,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -298,9 +355,13 @@
         "name": "no-workflow CT (entries_without_workflow)",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 275,
 =======
         "ms": 269,
+>>>>>>> Stashed changes
+=======
+        "ms": 499,
 >>>>>>> Stashed changes
         "planned": 25,
         "actual": 0,
@@ -315,9 +376,13 @@
         "name": "multi-actor create/publish (user_uid)",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 39,
 =======
         "ms": 34,
+>>>>>>> Stashed changes
+=======
+        "ms": 35,
 >>>>>>> Stashed changes
         "planned": 10,
         "actual": 0,
@@ -329,9 +394,13 @@
         "name": "branch/locale deletion (orphan cleanup)",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 268,
 =======
         "ms": 269,
+>>>>>>> Stashed changes
+=======
+        "ms": 509,
 >>>>>>> Stashed changes
         "planned": 15,
         "actual": 0,
@@ -350,7 +419,11 @@
         "name": "invite 10 users",
         "ok": false,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 39,
+=======
+        "ms": 38,
+>>>>>>> Stashed changes
 =======
         "ms": 38,
 >>>>>>> Stashed changes
