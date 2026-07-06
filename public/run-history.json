@@ -4,6 +4,7 @@
     "runNumber": 1406,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     "instance": "top-url-dev22-sso",
     "mode": "periodic",
     "dryRun": false,
@@ -59,25 +60,46 @@
     "stepsOk": 13,
     "stepsTotal": 16,
     "kpis": {
+=======
+    "instance": "cs-dev11-a",
+    "mode": "periodic",
+    "dryRun": false,
+    "startedAt": "2026-07-06T20:28:42.831Z",
+    "finishedAt": "2026-07-06T20:30:06.689Z",
+    "durationMs": 83858,
+    "stepsOk": 12,
+    "stepsTotal": 16,
+    "kpis": {
+>>>>>>> Stashed changes
       "deleted": 0,
       "deferred": 0,
       "deletedOver30d": 0,
       "deleted15to30d": 0,
       "deleted7to15d": 0,
       "restored": 0,
+<<<<<<< Updated upstream
       "created": 220,
+=======
+      "created": 225,
+>>>>>>> Stashed changes
       "failed": 0,
       "capHit": 0,
       "localized": 250,
       "already": 0,
       "localizeFailed": 0,
       "localeTargets": 5,
+<<<<<<< Updated upstream
       "published": 40,
+>>>>>>> Stashed changes
+=======
+      "published": 50,
 >>>>>>> Stashed changes
       "unpublished": 0,
       "publishFailed": 0,
       "transitioned": 0,
       "transitionFailed": 0,
+      "transitions": 0,
+      "transitionsSkipped": 0,
       "casesOk": 1,
       "casesFailed": 5,
       "churnLocale": 1,
@@ -88,6 +110,7 @@
       "dynCtEntries": 0,
       "workflowBranchAdds": 0,
       "secondWaveEntries": 0,
+<<<<<<< Updated upstream
       "transitions": 0,
       "publishRules": 0,
       "branchesDeleted": 0,
@@ -98,6 +121,14 @@
       "entriesCreated": 0,
 =======
       "editedPostPublish": 40,
+      "ctCreated": 1,
+      "entriesCreated": 25,
+>>>>>>> Stashed changes
+=======
+      "publishRules": 0,
+      "branchesDeleted": 0,
+      "ctsDeleted": 0,
+      "editedPostPublish": 50,
       "ctCreated": 1,
       "entriesCreated": 25,
 >>>>>>> Stashed changes
@@ -113,12 +144,16 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 1596,
 =======
         "ms": 2104,
 >>>>>>> Stashed changes
 =======
         "ms": 1872,
+>>>>>>> Stashed changes
+=======
+        "ms": 2291,
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -129,6 +164,7 @@
       {
         "name": "delete old entries",
         "ok": true,
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
         "ms": 3310,
@@ -155,6 +191,9 @@
 >>>>>>> Stashed changes
 =======
         "ms": 2897,
+=======
+        "ms": 3266,
+>>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
         "failed": 0,
@@ -164,6 +203,9 @@
           "deletedOver30d": 0,
           "deleted15to30d": 0,
           "deleted7to15d": 0
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
         },
         "errors": []
@@ -173,12 +215,16 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 825,
 =======
         "ms": 1200,
 >>>>>>> Stashed changes
 =======
         "ms": 1126,
+>>>>>>> Stashed changes
+=======
+        "ms": 1391,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -207,6 +253,7 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 1711,
         "planned": 80,
         "actual": 60,
@@ -225,6 +272,9 @@
           "capHit": 1
 =======
         "ms": 3120,
+=======
+        "ms": 3115,
+>>>>>>> Stashed changes
         "planned": 100,
         "actual": 100,
         "failed": 0,
@@ -232,13 +282,13 @@
           "created": 100,
           "failed": 0,
           "capHit": 0
->>>>>>> Stashed changes
         },
         "errors": []
       },
       {
         "name": "localize entries",
         "ok": true,
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
         "ms": 5212,
@@ -259,12 +309,18 @@
 >>>>>>> Stashed changes
 =======
         "ms": 12426,
+=======
+        "ms": 13113,
+>>>>>>> Stashed changes
         "planned": 250,
         "actual": 250,
         "failed": 0,
         "kpis": {
           "localized": 250,
           "already": 0,
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
           "localizeFailed": 0,
           "localeTargets": 5
@@ -276,12 +332,16 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 2561,
 =======
         "ms": 2938,
 >>>>>>> Stashed changes
 =======
         "ms": 2840,
+>>>>>>> Stashed changes
+=======
+        "ms": 3207,
 >>>>>>> Stashed changes
         "planned": 0,
         "actual": 0,
@@ -300,6 +360,7 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 397,
 =======
         "ms": 603,
@@ -311,11 +372,22 @@
         "actual": null,
         "failed": 0,
         "kpis": {},
+=======
+        "ms": 1565,
+        "planned": 0,
+        "actual": 0,
+        "failed": 0,
+        "kpis": {
+          "transitions": 0,
+          "transitionsSkipped": 0
+        },
+>>>>>>> Stashed changes
         "errors": []
       },
       {
         "name": "churn orphan cases",
         "ok": true,
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
         "ms": 3082,
@@ -324,6 +396,9 @@
 >>>>>>> Stashed changes
 =======
         "ms": 3701,
+>>>>>>> Stashed changes
+=======
+        "ms": 4206,
 >>>>>>> Stashed changes
         "planned": 6,
         "actual": 1,
@@ -337,14 +412,18 @@
           {
             "label": "disable→enable",
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             "message": "Churn $all 260619174319 (off 422, on 422)"
 =======
             "message": "Churn $all 260619204743 (off 422, on 422)"
 >>>>>>> Stashed changes
+=======
+            "message": "Churn $all 260627115648 (off 422, on 422)"
+>>>>>>> Stashed changes
           },
           {
             "label": "detach→reattach CT",
-            "message": "Quick Publish ⟂ demo_blocks (detach 422, reattach 422)"
+            "message": "no scoped workflow"
           },
           {
             "label": "branch create→delete",
@@ -352,6 +431,7 @@
           },
           {
             "label": "$all workflow create→delete",
+<<<<<<< Updated upstream
             "message": "create 422: Workflow creation failed. Please try again"
           },
           {
@@ -365,6 +445,13 @@
 =======
             "message": "demo_plain_text/blt68d0c08bac703a22 (delete 200, restore 422)"
 >>>>>>> Stashed changes
+=======
+            "message": "Churn $all 260706202913 (delete 422)"
+          },
+          {
+            "label": "entry delete→restore",
+            "message": "demo_plain_text/blt77935a9452976dc0 (delete 200, restore 422)"
+>>>>>>> Stashed changes
           }
         ]
       },
@@ -373,12 +460,16 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 320,
 =======
         "ms": 463,
 >>>>>>> Stashed changes
 =======
         "ms": 424,
+>>>>>>> Stashed changes
+=======
+        "ms": 787,
 >>>>>>> Stashed changes
         "planned": 30,
         "actual": 0,
@@ -405,14 +496,19 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 6341,
 =======
         "ms": 8867,
 >>>>>>> Stashed changes
+=======
+        "ms": 24556,
+>>>>>>> Stashed changes
         "planned": 50,
-        "actual": 0,
+        "actual": 50,
         "failed": 0,
         "kpis": {
+<<<<<<< Updated upstream
           "created": 0,
           "published": 0,
           "editedPostPublish": 0,
@@ -426,6 +522,11 @@
           "published": 40,
           "editedPostPublish": 40,
 >>>>>>> Stashed changes
+=======
+          "created": 50,
+          "published": 50,
+          "editedPostPublish": 50,
+>>>>>>> Stashed changes
           "failed": 0
         },
         "errors": []
@@ -435,14 +536,19 @@
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 7302,
 =======
         "ms": 10841,
 >>>>>>> Stashed changes
+=======
+        "ms": 18425,
+>>>>>>> Stashed changes
         "planned": 75,
-        "actual": 0,
+        "actual": 75,
         "failed": 0,
         "kpis": {
+<<<<<<< Updated upstream
           "created": 0,
 =======
         "ms": 15371,
@@ -452,6 +558,9 @@
         "kpis": {
           "created": 60,
 >>>>>>> Stashed changes
+=======
+          "created": 75,
+>>>>>>> Stashed changes
           "deleted": 0,
           "failed": 0
         },
@@ -459,6 +568,7 @@
       },
       {
         "name": "aged stalls (stalled_by_stage)",
+<<<<<<< Updated upstream
         "ok": true,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
@@ -486,10 +596,19 @@
           "failed": 0
 >>>>>>> Stashed changes
         },
+=======
+        "ok": false,
+        "ms": 988,
+        "planned": 0,
+        "actual": 0,
+        "failed": 1,
+        "kpis": {},
+>>>>>>> Stashed changes
         "errors": []
       },
       {
         "name": "no-workflow CT (entries_without_workflow)",
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
         "ok": false,
 <<<<<<< Updated upstream
@@ -506,6 +625,10 @@
 =======
         "ok": true,
         "ms": 4188,
+=======
+        "ok": true,
+        "ms": 5310,
+>>>>>>> Stashed changes
         "planned": 25,
         "actual": 25,
         "failed": 0,
@@ -513,6 +636,9 @@
           "ctCreated": 1,
           "entriesCreated": 25,
           "failed": 0
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
         },
         "errors": []
@@ -522,12 +648,16 @@
         "ok": false,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 295,
 =======
         "ms": 35,
 >>>>>>> Stashed changes
 =======
         "ms": 35,
+>>>>>>> Stashed changes
+=======
+        "ms": 539,
 >>>>>>> Stashed changes
         "planned": 10,
         "actual": 0,
@@ -540,12 +670,16 @@
         "ok": false,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 294,
 =======
         "ms": 483,
 >>>>>>> Stashed changes
 =======
         "ms": 413,
+>>>>>>> Stashed changes
+=======
+        "ms": 545,
 >>>>>>> Stashed changes
         "planned": 15,
         "actual": 0,
@@ -565,12 +699,16 @@
         "ok": false,
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "ms": 294,
 =======
         "ms": 36,
 >>>>>>> Stashed changes
 =======
         "ms": 43,
+>>>>>>> Stashed changes
+=======
+        "ms": 546,
 >>>>>>> Stashed changes
         "planned": null,
         "actual": null,
@@ -584,15 +722,19 @@
         "step": "churn orphan cases",
         "label": "disable→enable",
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         "message": "Churn $all 260619174319 (off 422, on 422)"
 =======
         "message": "Churn $all 260619204743 (off 422, on 422)"
+>>>>>>> Stashed changes
+=======
+        "message": "Churn $all 260627115648 (off 422, on 422)"
 >>>>>>> Stashed changes
       },
       {
         "step": "churn orphan cases",
         "label": "detach→reattach CT",
-        "message": "Quick Publish ⟂ demo_blocks (detach 422, reattach 422)"
+        "message": "no scoped workflow"
       },
       {
         "step": "churn orphan cases",
@@ -602,11 +744,16 @@
       {
         "step": "churn orphan cases",
         "label": "$all workflow create→delete",
+<<<<<<< Updated upstream
         "message": "create 422: Workflow creation failed. Please try again"
+=======
+        "message": "Churn $all 260706202913 (delete 422)"
+>>>>>>> Stashed changes
       },
       {
         "step": "churn orphan cases",
         "label": "entry delete→restore",
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
         "message": "demo_plain_text/blt111f084f5ae93c61 (delete 200, restore 422)"
@@ -620,6 +767,14 @@
         "message": "step exited non-zero"
 =======
         "message": "demo_plain_text/blt68d0c08bac703a22 (delete 200, restore 422)"
+>>>>>>> Stashed changes
+=======
+        "message": "demo_plain_text/blt77935a9452976dc0 (delete 200, restore 422)"
+      },
+      {
+        "step": "aged stalls (stalled_by_stage)",
+        "label": null,
+        "message": "step exited non-zero"
 >>>>>>> Stashed changes
       },
       {
