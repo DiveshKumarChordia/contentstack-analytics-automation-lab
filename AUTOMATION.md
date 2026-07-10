@@ -19,6 +19,17 @@ These extend coverage to the metering events the cma-api emits, so the downstrea
 - **`npm run automate:localize`** — For each content type, picks the newest N entries (default 10) in the master locale and creates localized versions in `fr-fr`, `de-de`, `en-gb` (configurable). Drives `entry_created` events keyed by the target locale — the only way to give the dashboard's Locale filter axis real variation. Idempotent — entries already localized are skipped via `GET /entries/{uid}/locales`. Runs in `automate:drive --mode periodic` between create and bulk-publish.
 - **`npm run automate:locale-experiments`** — Destructive scenario runner that creates fallback chains, populates entries, then deletes locales in declared orders to test cma-api's behavior. Drives `entries_orphaned_by_locale_deleted` meter events. NEVER runs in the periodic cron — gated behind `CONTENTSTACK_RUN_LOCALE_EXPERIMENTS=1`. Scenarios declared in [`scripts/locale-experiments.manifest.json`](scripts/locale-experiments.manifest.json): leaf delete, middle-of-chain delete, recreate-after-delete, fallback-first delete. Flags: `--dry-run`, `--only <scenario-id>`.
 
+### Meter Consistency Test Matrix (dedicated stack per case)
+
+- **`npm run automate:meter-matrix`** — Reads the 46-row Meter Consistency Test Matrix baked into [`scripts/meter-consistency-matrix.mjs`](scripts/meter-consistency-matrix.mjs), and for **every row creates a brand-new stack** (`POST /v3/stacks`), provisions exactly what that scenario needs (content type, a second branch/locale/environment, a workflow), then drives the row's specific create/publish/delete/workflow actions inside it. One case per stack, every run creates fresh stacks — even re-running the same case again never reuses a prior one. This gives the analytics team a clean, uncontaminated stack to point each meter-consistency check at.
+  - `--list` — print the matrix without calling any API.
+  - `--only entries_created,entries_deleted` — restrict to one or more categories.
+  - `--case entries_published:5` — run a single row.
+  - `--limit 3` — cap how many selected cases actually run (smoke test).
+  - Auth: same fully-automated user-session chain as `automate:workflows` (`CONTENTSTACK_USER_AUTHTOKEN`, or `CONTENTSTACK_USER_EMAIL`/`CONTENTSTACK_USER_PASSWORD`/`CONTENTSTACK_USER_TOTP_SECRET`) — stack creation requires a **user** authtoken, since management tokens are minted per-stack, after the stack already exists. Organization UID is auto-derived from the logged-in user; set `CONTENTSTACK_ORG_UID` to override.
+  - Output: `step-reports/meter-consistency-matrix.json` (latest run snapshot: every case's stack name/api_key/ok/detail) and `step-reports/meter-consistency-matrix-history.jsonl` (append-only, one line per case ever run).
+  - A handful of rows describe a time-window boundary condition ("outside range") that CMA can't backdate into existence — those still seed the entry for real and carry a `note` in the report explaining that the assertion is validated by re-querying with a narrower window, not by the seed step itself. Two more rows describe an internal `_workflow.uid: null`/`""` anomaly that isn't reachable through the public CMA — those seed the closest real equivalent (never transitioned) and are flagged with a `note` too.
+
 ### Orchestrator
 
 - **`npm run automate:drive`** — Single-entry orchestrator over all of the above. Runs each step as a child process so a single flaky step doesn't abort the cron. Three modes:

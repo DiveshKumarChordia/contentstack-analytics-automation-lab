@@ -399,8 +399,10 @@ export function headersForToken(apiKey, token, branch) {
 export async function loginUserSession(base, apiKey, email, password, tfaToken) {
   const headers = {
     'Content-Type': 'application/json',
-    api_key: apiKey,
   }
+  // api_key is optional here — /v3/user-session is an account-level login,
+  // not stack-scoped. Callers with no stack yet (e.g. creating one) can omit it.
+  if (apiKey) headers.api_key = apiKey
   const payload = { user: { email, password } }
   if (tfaToken) payload.user.tfa_token = tfaToken
   const res = await fetch(`${base}/v3/user-session`, {
@@ -449,20 +451,80 @@ export function userSessionHeaders(apiKey, authtoken, branch) {
  * flows gracefully.
  */
 export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
-  // Path 1: direct authtoken — bypass login
+  const authtoken = await resolveUserAuthtoken(base, { apiKey })
+  return authtoken ? userSessionHeaders(apiKey, authtoken, branch) : null
+}
+
+/**
+ * True when a failed /v3/user-session response is Contentstack asking for a
+ * second factor — as opposed to a plain wrong-password/locked-account
+ * failure. Matched on the error message rather than a status code, since
+ * that's the stable part across Contentstack API versions.
+ */
+function loginNeedsTfa(result) {
+  const msg = (result?.body?.error_message || JSON.stringify(result?.body || {})).toLowerCase()
+  return /\btfa\b|2fa|two[\s-]?factor|security code|verification code|authentication code|\botp\b/.test(msg)
+}
+
+/**
+ * Same fallback chain as tryLoadUserSessionHeaders, but returns the bare
+ * authtoken string (or null) instead of a headers object — for callers that
+ * have no stack (hence no api_key) yet, e.g. creating a brand-new stack.
+ * `apiKey` is entirely optional here and only forwarded to the login call
+ * for parity with existing callers; Contentstack's /v3/user-session login
+ * is account-level, not stack-scoped.
+ *
+ * Whether the account actually needs a second factor is detected from the
+ * server's response rather than assumed from CONTENTSTACK_USER_TOTP_SECRET
+ * being set — that var can be stale (left over from a different account) or
+ * simply irrelevant if the account has no MFA. Plain email+password is
+ * always tried first; TOTP/manual-TFA only kicks in if the server actually
+ * asks for it.
+ */
+export async function resolveUserAuthtoken(base, { apiKey } = {}) {
+  // Path 1: direct authtoken — bypass login entirely
   const directToken = optionalEnv('CONTENTSTACK_USER_AUTHTOKEN')
-  if (directToken) {
-    return userSessionHeaders(apiKey, directToken, branch)
-  }
+  if (directToken) return directToken
 
   const email = optionalEnv('CONTENTSTACK_USER_EMAIL')
   const password = optionalEnv('CONTENTSTACK_USER_PASSWORD')
   if (!email || !password) return null
 
-  // Path 2: TOTP at runtime — preferred for automation with 2FA enabled.
-  // Path 4 fallback: a manually-pasted TFA code (no secret).
   const totpSecret = optionalEnv('CONTENTSTACK_USER_TOTP_SECRET')
   const manualTfa = optionalEnv('CONTENTSTACK_USER_TFA_TOKEN')
+
+  // Phase A: plain login, no second factor offered. Covers non-MFA accounts
+  // even when CONTENTSTACK_USER_TOTP_SECRET happens to be set. Retries only
+  // on transient server errors (5xx/429) — a real auth failure shouldn't be
+  // hammered, that's how accounts get locked out.
+  const plainAttempts = 3
+  let plain = null
+  for (let attempt = 1; attempt <= plainAttempts; attempt += 1) {
+    plain = await loginUserSession(base, apiKey, email, password)
+    if (plain.ok) return plain.authtoken
+    const transient = plain.status >= 500 || plain.status === 429
+    if (!transient || attempt === plainAttempts) break
+    const wait = 1500 * attempt
+    console.warn(`  ⚠ /v3/user-session attempt ${attempt}/${plainAttempts} failed (${plain.status}) — retrying in ${wait / 1000}s`)
+    await sleep(wait)
+  }
+
+  if (!loginNeedsTfa(plain)) {
+    console.warn(
+      `  ⚠ /v3/user-session login failed (${plain.status}): ${plain.body?.error_message || JSON.stringify(plain.body).slice(0, 200)}`,
+    )
+    return null
+  }
+
+  if (!totpSecret && !manualTfa) {
+    console.warn(
+      '  ⚠ account requires a second factor (TFA/2FA) but neither CONTENTSTACK_USER_TOTP_SECRET nor ' +
+      'CONTENTSTACK_USER_TFA_TOKEN is set — cannot complete login.',
+    )
+    return null
+  }
+
+  console.log('  account requires a second factor — retrying with TFA code')
 
   // When multiple CI instances authenticate simultaneously with the same credentials,
   // they can collide on TOTP codes (30-second window). Avoid this by adding a random
@@ -477,10 +539,8 @@ export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
     }
   }
 
-  // Retry on transient failures: 5xx / 429 are server-side or rate-limit blips
-  // ("/v3/user-session 500: We're sorry, something went wrong…" is Contentstack's
-  // generic 500), and a 401 right at a TOTP rollover clears on a fresh code.
-  // We recompute the TOTP each attempt (time advances) and back off between tries.
+  // Phase B: TOTP/manual-TFA retry loop. We recompute the TOTP each attempt
+  // (time advances) and back off between tries.
   const maxAttempts = 4
   let last = null
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -495,7 +555,7 @@ export async function tryLoadUserSessionHeaders(base, apiKey, branch) {
     }
 
     const result = await loginUserSession(base, apiKey, email, password, tfaToken)
-    if (result.ok) return userSessionHeaders(apiKey, result.authtoken, branch)
+    if (result.ok) return result.authtoken
     last = result
 
     const transient = result.status >= 500 || result.status === 429
@@ -695,6 +755,27 @@ export async function findEnvironmentUidByName(base, headers, name) {
   if (!ok || !Array.isArray(body?.environments)) return null
   const env = body.environments.find((e) => e.name === name || e.uid === name)
   return env?.uid ?? null
+}
+
+/**
+ * Create a publish-target environment. New stacks start with zero
+ * environments, so anything that calls publishEntry() against a freshly
+ * created stack needs one of these first. `url` is a placeholder deploy
+ * target — Contentstack requires at least one, but nothing has to actually
+ * serve traffic there for CMA publish/entries_published metering to fire.
+ */
+export async function createEnvironment(base, headers, { name, locale = 'en-us', url = 'https://example.com' }) {
+  const payload = {
+    environment: {
+      name,
+      urls: [{ locale, url }],
+    },
+  }
+  return fetchWithLogging(
+    `${base}/v3/environments`,
+    { method: 'POST', headers, body: JSON.stringify(payload) },
+    { maxRetries: 2, logPrefix: `Create environment ${name}` },
+  )
 }
 
 export async function listPublishingRules(base, headers, { limit = 100, includeCount = true } = {}) {
@@ -1042,6 +1123,55 @@ export async function getCurrentUser(base, headers) {
   const res = await fetch(url, { method: 'GET', headers })
   const body = await res.json().catch(() => ({}))
   return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * Resolve the calling user's organization UID without requiring
+ * CONTENTSTACK_ORG_UID to be set — mirrors invite-users.mjs's derivation so
+ * new-stack automation needs no extra manual config beyond user-session auth.
+ */
+export async function deriveOrgUid(base, headers) {
+  const { ok, body } = await getCurrentUser(base, headers)
+  if (!ok) return null
+  const user = body?.user
+  return user?.org_uid?.[0] || user?.shared_org_uid?.[0] || null
+}
+
+/**
+ * Build headers for org-scoped calls that happen BEFORE a stack exists (e.g.
+ * creating one) — carries the user authtoken + organization_uid, no api_key.
+ */
+export function orgAuthHeaders(authtoken, orgUid) {
+  return {
+    authtoken,
+    organization_uid: orgUid,
+    'Content-Type': 'application/json',
+  }
+}
+
+/**
+ * POST /v3/stacks — create a brand-new stack in the given organization.
+ * Requires a USER authtoken (management tokens can't create stacks; they're
+ * minted per-stack, after the stack exists). Returns the created stack object
+ * (including its `api_key`) on success.
+ */
+export async function createStack(base, headers, { name, description, masterLocale = 'en-us' }) {
+  const payload = {
+    stack: {
+      name,
+      description: description || '',
+      master_locale: masterLocale,
+    },
+  }
+  // Stack creation is rate-limited more tightly than regular CMA calls —
+  // back-to-back creates across a large batch (e.g. one stack per matrix
+  // case) can hit 429 more often than everyday entry/content-type calls, so
+  // this gets a higher retry budget than fetchWithLogging's default.
+  return fetchWithLogging(
+    `${base}/v3/stacks`,
+    { method: 'POST', headers, body: JSON.stringify(payload) },
+    { maxRetries: 5, logPrefix: `Create stack ${name}` },
+  )
 }
 
 /** GET the stack's roles (mgmt token ok). Used to find a CMS/Developer role uid. */

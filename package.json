@@ -50,7 +50,9 @@
     "analytics:generate": "node scripts/generate-analytics-report.mjs",
     "analytics:from-roles": "node scripts/generate-analytics-report.mjs step-reports/automate-with-roles.json",
     "analytics:from-smart-random": "node scripts/generate-analytics-report.mjs step-reports/automate-smart-randomization.json",
-    "warm:launch-urls": "node scripts/warm-launch-urls.mjs"
+    "warm:launch-urls": "node scripts/warm-launch-urls.mjs",
+    "automate:meter-matrix": "node --env-file=.env scripts/meter-consistency-matrix.mjs",
+    "automate:meter-matrix:list": "node --env-file=.env scripts/meter-consistency-matrix.mjs --list"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

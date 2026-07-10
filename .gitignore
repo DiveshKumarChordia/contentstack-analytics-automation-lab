@@ -16,6 +16,10 @@ dist-ssr
 # Local stack credentials (do not commit)
 instance.txt
 
+# Per-run automation reports — regenerated each run, some embed live stack
+# api_keys (e.g. meter-consistency-matrix.json/.jsonl)
+step-reports/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
