@@ -7,22 +7,32 @@
  * Why one stack per case: isolating each scenario in its own stack means the
  * analytics team can query that stack alone and see EXACTLY the meter counts
  * the row predicts, with zero cross-contamination from other scenarios or
- * prior runs. Every invocation creates fresh stacks — even re-running the
- * same case number always gets a brand-new stack (no reuse, no dedup).
+ * prior runs.
+ *
+ * Stack lifecycle — at most 46 matrix stacks exist at any time: every case
+ * has a STABLE name prefix (category + case number + scenario slug, no
+ * timestamp). Before creating this run's stack, we list every stack in the
+ * org and delete any whose name starts with that exact case's prefix — so
+ * re-running the same case replaces its stack rather than piling up a new
+ * one alongside it. Only names matching our own `mtx-<category>-<num>-...`
+ * prefix are ever touched; nothing else in the org is looked at. The final
+ * stack name still embeds the run date so it's identifiable in the UI.
  *
  * Auth (fully automated, no manual step):
  *   Uses the same CONTENTSTACK_USER_AUTHTOKEN / CONTENTSTACK_USER_EMAIL +
  *   CONTENTSTACK_USER_PASSWORD (+ CONTENTSTACK_USER_TOTP_SECRET) chain as
- *   seed-workflows.mjs — see .env.example. Stack creation needs a USER
- *   authtoken (management tokens can't create stacks; they're minted
- *   per-stack, after the stack exists). The organization UID is
- *   auto-derived from the logged-in user unless CONTENTSTACK_ORG_UID is set.
+ *   seed-workflows.mjs — see .env.example. Stack creation (and deletion)
+ *   needs a USER authtoken (management tokens can't create or delete
+ *   stacks; they're minted per-stack, after the stack exists). The
+ *   organization UID is auto-derived from the logged-in user unless
+ *   CONTENTSTACK_ORG_UID is set.
  *
  * Usage:
  *   node --env-file=.env scripts/meter-consistency-matrix.mjs                # all 46 cases
  *   node --env-file=.env scripts/meter-consistency-matrix.mjs --list          # print the matrix, no API calls
  *   node --env-file=.env scripts/meter-consistency-matrix.mjs --only entries_created,entries_deleted
  *   node --env-file=.env scripts/meter-consistency-matrix.mjs --case entries_published:5
+ *   node --env-file=.env scripts/meter-consistency-matrix.mjs --case entries_deleted:5,entries_published:1  # multiple
  *   node --env-file=.env scripts/meter-consistency-matrix.mjs --limit 3       # first 3 selected cases (smoke test)
  *
  * Output:
@@ -37,6 +47,8 @@ import {
   deriveOrgUid,
   orgAuthHeaders,
   createStack,
+  listStacksInOrg,
+  deleteStack,
   createContentType,
   defaultTitleOnlySchema,
   createEntry,
@@ -498,8 +510,13 @@ function selectCases(opts) {
 // Per-case stack provisioning + execution
 // =============================================================================
 
+/** Stable per-case prefix — no run stamp — used to find and delete this case's prior stack. */
+function caseStackPrefix(c) {
+  return `mtx-${slug(c.category)}-${pad(c.num)}-${slug(c.scenario)}-`
+}
+
 function buildStackName(c, runStamp) {
-  return `mtx-${slug(c.category)}-${pad(c.num)}-${slug(c.scenario)}-${runStamp}`.slice(0, 90)
+  return `${caseStackPrefix(c)}${runStamp}`.slice(0, 90)
 }
 
 function makeEntryCtx({ base, apiKey, authtoken, ctUid, secondCtUid, masterLocale, secondLocale, envPrimary, envSecondary, workflow }) {
@@ -553,16 +570,29 @@ function makeEntryCtx({ base, apiKey, authtoken, ctUid, secondCtUid, masterLocal
 }
 
 /** Provision a fresh stack for one case, then run it. Never throws — all failures are captured in the result. */
-async function runCase(c, shared, runStamp) {
+async function runCase(c, shared, runStamp, runDateLabel) {
   const startedAt = Date.now()
   const stackName = buildStackName(c, runStamp)
   const phases = []
   const record = (name, ok, extra) => phases.push({ name, ok, ...extra })
 
   try {
+    // Delete-before-create: keep at most one stack alive per case, ever.
+    // Only stacks whose name starts with THIS case's exact prefix are ever
+    // touched — nothing else in the org is looked at or matched.
+    const prefix = caseStackPrefix(c)
+    const stale = (shared.existingStacks || []).filter((s) => typeof s?.name === 'string' && s.name.startsWith(prefix))
+    for (const s of stale) {
+      const del = await deleteStack(shared.base, userSessionHeaders(s.api_key, shared.authtoken), { name: s.name })
+      record('delete_prior_stack', del.ok, { status: del.status, deletedStackName: s.name, deletedStackUid: s.uid })
+    }
+
     const created = await createStack(shared.base, orgAuthHeaders(shared.authtoken, shared.orgUid), {
       name: stackName,
-      description: `Meter matrix — ${c.category} #${c.num}: ${c.scenario} | ${c.keyFields}`,
+      description:
+        `Meter Consistency Test Matrix — ${c.category} #${c.num}: ${c.scenario}. ` +
+        `Key fields: ${c.keyFields}. Run: ${runDateLabel}. ` +
+        `Auto-managed by meter-consistency-matrix.mjs — replaced on next run, safe to delete.`,
       masterLocale: shared.masterLocale,
     })
     record('create_stack', created.ok, { status: created.status })
@@ -589,13 +619,13 @@ async function runCase(c, shared, runStamp) {
     }
 
     const envPrimary = 'production'
-    const env1 = await createEnvironment(shared.base, hdr(), { name: envPrimary, locale: shared.masterLocale })
+    const env1 = await createEnvironment(shared.base, hdr(), { name: envPrimary, locale: shared.masterLocale, url: shared.deployUrl })
     record('create_environment_primary', env1.ok, { status: env1.status })
 
     let envSecondary = null
     if (c.needs.env2) {
       envSecondary = 'staging'
-      const env2 = await createEnvironment(shared.base, hdr(), { name: envSecondary, locale: shared.masterLocale })
+      const env2 = await createEnvironment(shared.base, hdr(), { name: envSecondary, locale: shared.masterLocale, url: shared.deployUrl })
       record('create_environment_secondary', env2.ok, { status: env2.status })
     }
 
@@ -714,15 +744,29 @@ async function main() {
   }
 
   const masterLocale = optionalEnv('CONTENTSTACK_LOCALE', 'en-us')
-  const runStamp = optionalEnv('RUN_STAMP') || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-  const shared = { base, authtoken, orgUid, masterLocale }
+  const now = new Date()
+  // Filesystem/stack-name-safe date stamp, e.g. 2026-07-10-09-45-30 — makes
+  // the run date visible directly in the stack name, not just its description.
+  const runStamp = optionalEnv('RUN_STAMP') || now.toISOString().slice(0, 19).replace(/[:T]/g, '-')
+  const runDateLabel = now.toISOString()
+  // Reuse the CDN delivery host you've already configured for the live site
+  // as the environment's deploy URL, instead of an unrelated placeholder —
+  // it's a real, reachable HTTPS URL, unlike a dummy example.com.
+  const deployUrl = optionalEnv('VITE_CONTENTSTACK_DELIVERY_HOST') || optionalEnv('CONTENTSTACK_DELIVERY_HOST') || undefined
+
+  const stacksList = await listStacksInOrg(base, orgAuthHeaders(authtoken, orgUid))
+  const existingStacks = Array.isArray(stacksList.body?.stacks) ? stacksList.body.stacks : []
+  const priorMatrixStacks = existingStacks.filter((s) => typeof s?.name === 'string' && s.name.startsWith('mtx-'))
+  console.log(`  found ${priorMatrixStacks.length} prior matrix stack(s) in the org — matching cases will be replaced`)
+
+  const shared = { base, authtoken, orgUid, masterLocale, deployUrl, existingStacks }
 
   mkdirSync(REPORT_DIR, { recursive: true })
   const results = []
 
   for (const c of selected) {
     process.stdout.write(`  → ${c.category} #${c.num} "${c.scenario}" … `)
-    const result = await runCase(c, shared, runStamp)
+    const result = await runCase(c, shared, runStamp, runDateLabel)
     console.log(result.ok ? `✓ (${result.stackName})` : `✗ ${result.detail} (${result.stackName})`)
     results.push(result)
     appendFileSync(HISTORY_PATH, `${JSON.stringify({ runStamp, ...result })}\n`, 'utf-8')

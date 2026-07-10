@@ -1174,6 +1174,32 @@ export async function createStack(base, headers, { name, description, masterLoca
   )
 }
 
+/**
+ * GET /v3/stacks — list every stack the calling user can see in the given
+ * organization. Pass org-scoped headers (orgAuthHeaders), not a specific
+ * stack's api_key. Used to find stacks by name before deleting them.
+ */
+export async function listStacksInOrg(base, headers) {
+  const res = await fetch(`${base}/v3/stacks`, { method: 'GET', headers })
+  const body = await res.json().catch(() => ({}))
+  return { ok: res.ok, status: res.status, body }
+}
+
+/**
+ * DELETE /v3/stacks — permanently delete a stack. Contentstack requires the
+ * exact stack name echoed back in the body as a confirmation step (mirrors
+ * the "type the name to confirm" pattern of the UI's delete dialog).
+ * `headers` must be scoped to the TARGET stack (its own api_key + a user
+ * authtoken) — a management token cannot delete a stack.
+ */
+export async function deleteStack(base, headers, { name }) {
+  return fetchWithLogging(
+    `${base}/v3/stacks`,
+    { method: 'DELETE', headers, body: JSON.stringify({ stack: { name } }) },
+    { maxRetries: 2, logPrefix: `Delete stack ${name}` },
+  )
+}
+
 /** GET the stack's roles (mgmt token ok). Used to find a CMS/Developer role uid. */
 export async function listStackRoles(base, headers) {
   const url = `${base}/v3/roles?include_rules=false&limit=100`
