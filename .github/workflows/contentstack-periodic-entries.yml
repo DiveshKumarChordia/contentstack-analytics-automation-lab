@@ -119,9 +119,13 @@ jobs:
       # Persist the run record so the /runs dashboard can aggregate across runs.
       # Commits public/run-history.json back to the SAME branch. The periodic
       # workflow is cron-only (not on:push), so this commit never re-triggers it.
-      # Uses safe-append-run-history.mjs to handle race conditions and automatically
-      # clean up any merge conflict markers that might have been committed by
-      # previous runs. This ensures JSON integrity even with concurrent matrix jobs.
+      #
+      # Several matrix jobs (one per instance) race to append here concurrently.
+      # Each retry attempt starts from a clean `reset --hard` onto the current
+      # remote tip and re-runs the append fresh against it — no merge, rebase,
+      # or stash is ever used, so this can't leave conflict markers in the file
+      # (a previous version of this loop used pull+rebase, which did, repeatedly,
+      # across every cron run — see git history before this fix).
       - name: Commit run history
         if: always() && github.ref == 'refs/heads/main'
         run: |
@@ -131,30 +135,28 @@ jobs:
             echo "no run record to commit"; exit 0
           fi
 
-          # Pull latest to ensure we have the latest version (might have conflict markers)
-          git pull origin "${GITHUB_REF_NAME}" || true
-
-          # Safely append the run record (auto-cleans conflict markers, validates JSON)
-          node scripts/safe-append-run-history.mjs .run-record.json
-
-          # Commit if there are changes
-          if [ -z "$(git status --porcelain public/run-history.json)" ]; then
-            echo "no changes to commit"; exit 0
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/run-history.json
-          git commit -m "chore(run-data): append run ${GITHUB_RUN_ID} [skip ci]"
 
-          # Retry push up to 5 times (handles race between pull and push)
-          for attempt in 1 2 3 4 5; do
+          for attempt in 1 2 3 4 5 6 7 8; do
+            git fetch origin "${GITHUB_REF_NAME}"
+            git reset --hard "origin/${GITHUB_REF_NAME}"
+
+            # Safely append the run record against this exact tip (validates JSON)
+            node scripts/safe-append-run-history.mjs .run-record.json
+
+            if [ -z "$(git status --porcelain public/run-history.json)" ]; then
+              echo "no changes to commit"; exit 0
+            fi
+
+            git add public/run-history.json
+            git commit -m "chore(run-data): append run ${GITHUB_RUN_ID} [skip ci]"
+
             if git push origin "HEAD:${GITHUB_REF_NAME}"; then
               echo "✓ pushed run history (attempt $attempt)"; exit 0
             fi
-            echo "push raced — retrying ($attempt/5)";
-            git pull origin "${GITHUB_REF_NAME}" || true
-            git rebase HEAD~1 || git rebase --abort
+            echo "push raced — retrying ($attempt/8)"
+            sleep $((attempt * 2))
           done
           echo "::warning::could not push run history after retries (non-fatal, but run data may not appear in dashboard)"
 

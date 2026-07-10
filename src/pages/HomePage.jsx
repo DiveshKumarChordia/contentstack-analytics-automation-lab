@@ -7,6 +7,8 @@ import {
   useState,
 } from 'react'
 import { DigestItem } from '../components/DigestItem.jsx'
+import EnvironmentGallery from '../components/EnvironmentGallery.jsx'
+import '../components/EnvironmentGallery.css'
 import {
   buildEntriesUrl,
   deliveryHeaders,
@@ -184,6 +186,8 @@ export default function HomePage() {
           </p>
         ) : null}
       </div>
+
+      <EnvironmentGallery />
 
       {!loading && !error && totalEntries > 0 ? (
         <div
