@@ -195,7 +195,9 @@ async function deliveryVerify({ apiKey, publishEnv, branch, entryUids }) {
 }
 
 async function main() {
-  const { apiKey, token, base, branch, locale, publishEnv } = loadStackAuth()
+  // publishEnv is reassigned by the preflight below when the preferred value
+  // turns out not to exist on this stack.
+  let { apiKey, token, base, branch, locale, publishEnv } = loadStackAuth()
   const headers = managementHeaders(apiKey, token, branch)
   const count = intEnv('TOP_URL_ENTRY_COUNT', 5)
 
@@ -203,31 +205,62 @@ async function main() {
     `top-url-entries: ${CT_UID} × ${count} → ${base} (branch ${branch || 'default'}, locale ${locale}, publish "${publishEnv}")`,
   )
 
-  // ── 0. Preflight: the publish target must exist on THIS stack ─────────────
-  // Entries are the scarce resource (the org sits at its cap), so validate the
-  // publish environment BEFORE creating anything. Without this, a wrong or
-  // out-of-token-scope environment creates N entries that can never be
-  // published and cannot be reclaimed — observed in CI as 5 entries created
-  // followed by 5 × HTTP 401 "Environment doesn't exist or insufficient
-  // permission to access it."
-  const envUid = await findEnvironmentUidByName(base, headers, publishEnv)
-  if (!envUid) {
+  // ── 0. Preflight: resolve a publish target that exists on THIS stack ──────
+  // Entries are the scarce resource (the org sits at its cap), so the publish
+  // target is validated BEFORE anything is created.
+  //
+  // loadStackAuth() prefers CONTENTSTACK_PUBLISH_ENVIRONMENT over
+  // VITE_CONTENTSTACK_ENVIRONMENT. In GitHub Actions a repository-level secret
+  // is visible to every environment job, so an instance that sets only
+  // VITE_CONTENTSTACK_ENVIRONMENT still inherits the repo-level
+  // CONTENTSTACK_PUBLISH_ENVIRONMENT — which names an environment on a
+  // DIFFERENT stack. Actions expressions cannot tell repo-level from
+  // environment-level secrets, so this cannot be fixed in the workflow YAML.
+  //
+  // Observed on the "ssss dev22" instance: content type created, 5 entries
+  // created, then 5 × HTTP 401 "Environment doesn't exist or insufficient
+  // permission to access it" — 5 unreclaimable entries on a capped org.
+  //
+  // So try each candidate in preference order and take the first that actually
+  // exists here, rather than trusting the first one blindly.
+  const envCandidates = [
+    ...new Set(
+      [
+        optionalEnv('CONTENTSTACK_PUBLISH_ENVIRONMENT'),
+        optionalEnv('VITE_CONTENTSTACK_ENVIRONMENT'),
+      ].filter(Boolean),
+    ),
+  ]
+
+  let resolvedEnv = null
+  let resolvedEnvUid = null
+  for (const candidate of envCandidates) {
+    const uid = await findEnvironmentUidByName(base, headers, candidate)
+    if (uid) {
+      resolvedEnv = candidate
+      resolvedEnvUid = uid
+      break
+    }
+    console.warn(`  publish environment "${candidate}" not found on this stack`)
+  }
+
+  if (!resolvedEnv) {
     const list = await listEnvironments(base, headers)
     const names = (list.body?.environments ?? []).map((e) => e.name).filter(Boolean)
     console.error(
-      `Publish environment "${publishEnv}" is not usable on this stack — nothing was created.`,
+      `No usable publish environment — tried ${envCandidates.map((c) => `"${c}"`).join(', ') || '(none set)'}. Nothing was created.`,
     )
     if (list.ok) {
       console.error(
         names.length
-          ? `  Environments this token can see: ${names.join(', ')}`
+          ? `  Environments this token CAN see: ${names.join(', ')}`
           : '  This token can see no environments at all.',
       )
       console.error(
-        '  Either CONTENTSTACK_PUBLISH_ENVIRONMENT / VITE_CONTENTSTACK_ENVIRONMENT names an\n' +
-          '  environment on a DIFFERENT stack (a repo-level secret leaking into this instance),\n' +
-          "  or the management token's scope excludes this environment. Management tokens are\n" +
-          '  scoped per environment — check Settings → Tokens → Management Tokens.',
+        '  Set CONTENTSTACK_PUBLISH_ENVIRONMENT on this GitHub Environment to one of the above.\n' +
+          "  If the list looks like another stack's, the management token and API key are mismatched.\n" +
+          '  If the list is empty, the token scope excludes every environment\n' +
+          '  (Settings → Tokens → Management Tokens — scope is per environment).',
       )
     } else {
       console.error(`  Could not list environments (HTTP ${list.status}).`)
@@ -237,11 +270,22 @@ async function main() {
       actual: 0,
       failed: count,
       kpis: { publishEnvironmentValid: 0 },
-      errors: [{ label: publishEnv, message: 'publish environment missing or out of token scope' }],
+      errors: [
+        { label: envCandidates.join(',') || '(unset)', message: 'no publish environment exists on this stack' },
+      ],
     })
     process.exit(1)
   }
-  console.log(`✓ publish environment "${publishEnv}" resolved (${envUid})`)
+
+  if (resolvedEnv !== publishEnv) {
+    console.warn(
+      `  note: falling back to "${resolvedEnv}" — "${publishEnv}" does not exist on this stack.\n` +
+        '  That is usually a repository-level CONTENTSTACK_PUBLISH_ENVIRONMENT secret shadowing this\n' +
+        "  instance's own value. Set CONTENTSTACK_PUBLISH_ENVIRONMENT at the environment level to silence this.",
+    )
+  }
+  publishEnv = resolvedEnv
+  console.log(`✓ publish environment "${publishEnv}" resolved (${resolvedEnvUid})`)
 
   // ── 1. Ensure the content type ────────────────────────────────────────────
   const existing = await getContentType(base, headers, CT_UID)
