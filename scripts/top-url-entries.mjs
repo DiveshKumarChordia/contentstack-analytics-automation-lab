@@ -152,31 +152,46 @@ async function deliveryVerify({ apiKey, publishEnv, branch, entryUids }) {
     return { skipped: true, found: 0 }
   }
 
-  const url = new URL(`${host}/v3/content_types/${CT_UID}/entries`)
-  if (publishEnv) url.searchParams.set('environment', publishEnv)
   const headers = { api_key: apiKey, access_token: token }
   if (branch) headers.branch = branch
 
-  const wanted = new Set(entryUids)
-  // Publish is async on the CDN side — poll rather than assert on the first GET.
-  for (let attempt = 1; attempt <= 6; attempt++) {
-    const res = await fetch(url, { headers })
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const msg = body?.error_message ?? `HTTP ${res.status}`
-      console.warn(`delivery verify: attempt ${attempt} failed — ${msg}`)
-    } else {
-      const entries = Array.isArray(body.entries) ? body.entries : []
-      const found = entries.filter((e) => wanted.has(String(e?.uid))).length
-      console.log(
-        `delivery verify: attempt ${attempt} — ${entries.length} entry(s) live on "${publishEnv}", ${found}/${wanted.size} from this run`,
-      )
-      if (found >= wanted.size) return { skipped: false, found, total: entries.length }
-      if (attempt === 6) return { skipped: false, found, total: entries.length }
-    }
-    await sleep(3000)
+  // Check each UID against the single-entry endpoint rather than scanning the
+  // entries list. The list endpoint returns one default-ordered page (100), so
+  // once a content type has more than that, freshly published entries need not
+  // appear on page 1 — which reported a false "0/5 visible" in CI even though
+  // all five had published successfully.
+  const detailUrl = (uid) => {
+    const u = new URL(`${host}/v3/content_types/${CT_UID}/entries/${uid}`)
+    if (publishEnv) u.searchParams.set('environment', publishEnv)
+    return u
   }
-  return { skipped: false, found: 0 }
+
+  const pending = new Set(entryUids)
+  const total = pending.size
+  // Publishing is asynchronous on the CDN side, so poll rather than assert on
+  // the first pass. ~30s total is enough in practice for a handful of entries.
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    for (const uid of [...pending]) {
+      const res = await fetch(detailUrl(uid), { headers })
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}))
+        if (body?.entry?.uid) pending.delete(uid)
+      }
+    }
+    const found = total - pending.size
+    console.log(
+      `delivery verify: attempt ${attempt} — ${found}/${total} of this run's entries live on "${publishEnv}"`,
+    )
+    if (pending.size === 0) return { skipped: false, found, total }
+    if (attempt === 6) {
+      console.warn(
+        `delivery verify: ${pending.size} entry(s) not visible yet — publishing is async, so this can be propagation lag rather than a failure.`,
+      )
+      return { skipped: false, found, total }
+    }
+    await sleep(5000)
+  }
+  return { skipped: false, found: 0, total }
 }
 
 async function main() {
