@@ -160,8 +160,26 @@ jobs:
           done
           echo "::warning::could not push run history after retries (non-fatal, but run data may not appear in dashboard)"
 
+      # ── Launch warming (also runs standalone in top-url-launch.yml) ─────────
+      # Hits one Launch page per PUBLISHED entry — the app is a HashRouter, so
+      # every entry is its own page at /#/entry/:contentTypeUid/:entryUid. This
+      # warms the content types this data-gen pipeline just filled
+      # (VITE_CONTENTSTACK_CONTENT_TYPE_UIDS, i.e. the demo_* set).
+      #
+      # Deliberately duplicated with Track 1 (.github/workflows/top-url-launch.yml):
+      #   - here, right after generation, so freshly published entries get hit
+      #     while they are new — this is the original behaviour;
+      #   - there, on its own token-only cron, so the site keeps being warmed
+      #     even when this heavy pipeline is failing, and so the top-url content
+      #     type gets covered too.
+      # Between the two, every published entry across both content-type sets is
+      # hit each cycle.
+      #
+      # `if: always()` rather than `if: success()`: these steps only read, and a
+      # failure in one of the 15 generation steps above should not mean the site
+      # goes un-warmed. That coupling was the original bug.
       - name: Warm Launch per-entry page URLs
-        if: success()
+        if: always()
         env:
           LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
           VITE_CONTENTSTACK_DELIVERY_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
@@ -177,7 +195,7 @@ jobs:
         run: npm run warm:launch-urls
 
       - name: Warm Launch site and Delivery API (browser-equivalent GETs)
-        if: success()
+        if: always()
         env:
           DEL_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
           DEL_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
