@@ -36,6 +36,8 @@ import {
   getContentType,
   createEntry,
   publishEntry,
+  listEnvironments,
+  findEnvironmentUidByName,
   sleep,
 } from './lib/cma.mjs'
 import { writeStepReport } from './lib/report.mjs'
@@ -186,6 +188,46 @@ async function main() {
     `top-url-entries: ${CT_UID} × ${count} → ${base} (branch ${branch || 'default'}, locale ${locale}, publish "${publishEnv}")`,
   )
 
+  // ── 0. Preflight: the publish target must exist on THIS stack ─────────────
+  // Entries are the scarce resource (the org sits at its cap), so validate the
+  // publish environment BEFORE creating anything. Without this, a wrong or
+  // out-of-token-scope environment creates N entries that can never be
+  // published and cannot be reclaimed — observed in CI as 5 entries created
+  // followed by 5 × HTTP 401 "Environment doesn't exist or insufficient
+  // permission to access it."
+  const envUid = await findEnvironmentUidByName(base, headers, publishEnv)
+  if (!envUid) {
+    const list = await listEnvironments(base, headers)
+    const names = (list.body?.environments ?? []).map((e) => e.name).filter(Boolean)
+    console.error(
+      `Publish environment "${publishEnv}" is not usable on this stack — nothing was created.`,
+    )
+    if (list.ok) {
+      console.error(
+        names.length
+          ? `  Environments this token can see: ${names.join(', ')}`
+          : '  This token can see no environments at all.',
+      )
+      console.error(
+        '  Either CONTENTSTACK_PUBLISH_ENVIRONMENT / VITE_CONTENTSTACK_ENVIRONMENT names an\n' +
+          '  environment on a DIFFERENT stack (a repo-level secret leaking into this instance),\n' +
+          "  or the management token's scope excludes this environment. Management tokens are\n" +
+          '  scoped per environment — check Settings → Tokens → Management Tokens.',
+      )
+    } else {
+      console.error(`  Could not list environments (HTTP ${list.status}).`)
+    }
+    writeStepReport({
+      planned: count,
+      actual: 0,
+      failed: count,
+      kpis: { publishEnvironmentValid: 0 },
+      errors: [{ label: publishEnv, message: 'publish environment missing or out of token scope' }],
+    })
+    process.exit(1)
+  }
+  console.log(`✓ publish environment "${publishEnv}" resolved (${envUid})`)
+
   // ── 1. Ensure the content type ────────────────────────────────────────────
   const existing = await getContentType(base, headers, CT_UID)
   const preExisted = Boolean(existing.ok && existing.body?.content_type)
@@ -274,6 +316,15 @@ async function main() {
         message: `publish → ${pub.status} ${JSON.stringify(pub.body?.errors ?? pub.body?.error_message ?? '').slice(0, 200)}`,
       })
       console.warn(`✗ publish ${entryUid} failed (HTTP ${pub.status})`)
+      // An auth failure is a configuration problem, not a per-entry one: it will
+      // fail identically for every remaining row. Stop rather than spend more of
+      // a capped entry quota on entries that provably cannot be published.
+      if (pub.status === 401 || pub.status === 403) {
+        console.error(
+          `Aborting after ${i + 1}/${count}: publishing to "${publishEnv}" is unauthorized, so the remaining rows would be created but never published.`,
+        )
+        break
+      }
       continue
     }
     published += 1
