@@ -36,12 +36,18 @@
 #   LAUNCH_SITE_URL                        — optional; warming self-skips if unset
 #   CONTENTSTACK_MANAGEMENT_HOST, CONTENTSTACK_BRANCH, CONTENTSTACK_LOCALE — optional
 #
-# Repository Actions variables:
-#   CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON — reused, so both tracks target the
-#     same set of instances. Default if unset: ["default"]
-#   TOP_URL_ENTRY_COUNT          — rows created per run (default 5)
-#   TOP_URL_CONTENT_TYPE_UID     — default top_url_lines
-#   CONTENTSTACK_WARMUP_GET_COUNT — repeat GETs per URL in the warm step (default 100)
+# Repository Actions variables — ALL OPTIONAL. As of this writing the repo defines
+# exactly one variable (CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON) and no environment
+# variables, so every entry below except that one is currently unset and the code
+# defaults apply. Create them only to override:
+#   CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON — currently 7 instances; inherited by
+#     this track unless TOP_URL_ENVIRONMENTS_JSON is set. Default if unset: ["default"]
+#   TOP_URL_ENVIRONMENTS_JSON      — scope this track to fewer instances
+#   TOP_URL_ENTRY_COUNT            — rows created per run (default 5)
+#   TOP_URL_CONTENT_TYPE_UID       — default top_url_lines
+#   TOP_URL_WARM_CONTENT_TYPE_UIDS — override which entry pages get warmed
+#   LAUNCH_ENTRY_WARMUP_MAX        — cap entry-page GETs per run
+#   CONTENTSTACK_WARMUP_GET_COUNT  — repeat GETs per URL in the warm step (default 100)
 
 name: Top URL site + Launch warming
 
@@ -121,6 +127,12 @@ jobs:
           VITE_CONTENTSTACK_DELIVERY_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
           VITE_CONTENTSTACK_DELIVERY_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
           VITE_CONTENTSTACK_BRANCH: ${{ secrets.VITE_CONTENTSTACK_BRANCH }}
+          # Required for top-url-drive.mjs defaultWarmUids() to widen per-entry
+          # page warming beyond the top-URL content type. Without it that
+          # function sees nothing and warms top_url_lines alone — which is what
+          # happened on the first CI runs. It lives as a repository SECRET here
+          # (not a variable), hence the secrets-first lookup.
+          VITE_CONTENTSTACK_CONTENT_TYPE_UIDS: ${{ secrets.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS || vars.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS }}
           LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
           LAUNCH_ENTRY_WARMUP_MAX: ${{ secrets.LAUNCH_ENTRY_WARMUP_MAX || vars.LAUNCH_ENTRY_WARMUP_MAX }}
           TOP_URL_CONTENT_TYPE_UID: ${{ vars.TOP_URL_CONTENT_TYPE_UID }}
