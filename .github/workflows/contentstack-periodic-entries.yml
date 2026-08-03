@@ -160,78 +160,11 @@ jobs:
           done
           echo "::warning::could not push run history after retries (non-fatal, but run data may not appear in dashboard)"
 
-      - name: Warm Launch per-entry page URLs
-        if: success()
-        env:
-          LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
-          VITE_CONTENTSTACK_DELIVERY_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
-          VITE_CONTENTSTACK_DELIVERY_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
-          VITE_CONTENTSTACK_API_KEY: ${{ secrets.VITE_CONTENTSTACK_API_KEY || secrets.CONTENTSTACK_API_KEY }}
-          CONTENTSTACK_API_KEY: ${{ secrets.CONTENTSTACK_API_KEY || secrets.VITE_CONTENTSTACK_API_KEY }}
-          VITE_CONTENTSTACK_ENVIRONMENT: ${{ secrets.VITE_CONTENTSTACK_ENVIRONMENT || secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT }}
-          CONTENTSTACK_PUBLISH_ENVIRONMENT: ${{ secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT || secrets.VITE_CONTENTSTACK_ENVIRONMENT }}
-          CONTENTSTACK_BRANCH: ${{ secrets.CONTENTSTACK_BRANCH }}
-          VITE_CONTENTSTACK_BRANCH: ${{ secrets.VITE_CONTENTSTACK_BRANCH }}
-          VITE_CONTENTSTACK_CONTENT_TYPE_UIDS: ${{ secrets.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS || vars.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS }}
-          LAUNCH_ENTRY_WARMUP_MAX: ${{ secrets.LAUNCH_ENTRY_WARMUP_MAX || vars.LAUNCH_ENTRY_WARMUP_MAX }}
-        run: npm run warm:launch-urls
-
-      - name: Warm Launch site and Delivery API (browser-equivalent GETs)
-        if: success()
-        env:
-          DEL_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
-          DEL_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
-          API_KEY: ${{ secrets.VITE_CONTENTSTACK_API_KEY || secrets.CONTENTSTACK_API_KEY }}
-          ENV_ID: ${{ secrets.VITE_CONTENTSTACK_ENVIRONMENT || secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT }}
-          CT_UIDS: ${{ secrets.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS || vars.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS }}
-          LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
-          CONTENTSTACK_WARMUP_GET_COUNT: ${{ secrets.CONTENTSTACK_WARMUP_GET_COUNT || vars.CONTENTSTACK_WARMUP_GET_COUNT }}
-        run: |
-          set -euo pipefail
-          REPEAT="${CONTENTSTACK_WARMUP_GET_COUNT:-100}"
-          case "$REPEAT" in ''|*[!0-9]*) REPEAT=100 ;; esac
-          if [ "$REPEAT" -lt 1 ]; then REPEAT=1; fi
-          echo "Warm-up: ${REPEAT} GET(s) per Launch URL and per Delivery entries URL"
-
-          if [ -z "${LAUNCH_SITE_URL:-}" ]; then
-            echo "::notice::Skipping Launch site GET: set LAUNCH_SITE_URL on GitHub Environment \"${{ matrix.instance }}\"."
-          else
-            echo "GET Launch site ×${REPEAT}: ${LAUNCH_SITE_URL}"
-            set +e
-            for ((i=1; i<=REPEAT; i++)); do
-              curl -fsSL -o /dev/null --max-time 90 "$LAUNCH_SITE_URL" \
-                || echo "::warning::Launch site GET $i/${REPEAT} failed (workflow continues)"
-            done
-            set -e
-          fi
-
-          if [ -z "${DEL_HOST:-}" ] || [ -z "${DEL_TOKEN:-}" ] || [ -z "${API_KEY:-}" ]; then
-            echo "::notice::Skipping Delivery API GETs: set VITE_CONTENTSTACK_DELIVERY_HOST, VITE_CONTENTSTACK_DELIVERY_TOKEN, and API key secrets on this environment to mirror the app."
-            exit 0
-          fi
-
-          HOST="${DEL_HOST%/}"
-          UIDS_RAW="${CT_UIDS:-top_url_lines}"
-          IFS=',' read -ra UIDS <<< "$UIDS_RAW"
-          set +e
-          for ((n=1; n<=REPEAT; n++)); do
-            for raw in "${UIDS[@]}"; do
-              uid="$(printf '%s' "$raw" | xargs)"
-              [ -z "$uid" ] && continue
-              path="${HOST}/v3/content_types/${uid}/entries"
-              if [ -n "${ENV_ID:-}" ]; then
-                path="${path}?environment=${ENV_ID}"
-              fi
-              echo "GET Delivery ${n}/${REPEAT}: .../${uid}/entries"
-              code=$(curl -sS -o /dev/null -w "%{http_code}" \
-                -H "api_key: ${API_KEY}" \
-                -H "access_token: ${DEL_TOKEN}" \
-                "$path")
-              if [ "$code" != "200" ]; then
-                echo "::warning::Delivery GET ${uid} (round ${n}) returned HTTP ${code}"
-              else
-                echo "OK ${uid} round ${n}/${REPEAT} (HTTP ${code})"
-              fi
-            done
-          done
-          set -e
+      # Launch warming used to live here as two trailing steps. It moved to
+      # .github/workflows/top-url-launch.yml (Track 1, token-only) because:
+      #   - both steps carried `if: success()`, so any failure in the heavy
+      #     pipeline above meant the site was never warmed at all; and
+      #   - they warmed VITE_CONTENTSTACK_CONTENT_TYPE_UIDS (the demo types)
+      #     rather than the top-URL content type the site actually shows.
+      # This workflow is now purely data generation. Keep it that way — the two
+      # tracks must be able to fail independently.

@@ -1,0 +1,178 @@
+# Track 1 of two independent automation workflows.
+#
+#   Track 1 — THIS FILE (.github/workflows/top-url-launch.yml)
+#     The top-URL content + Launch site warming. Auth is TOKEN-ONLY:
+#     stack API key + management token (writes) + delivery token (reads).
+#     It deliberately does NOT receive CONTENTSTACK_USER_EMAIL / _PASSWORD /
+#     _TOTP_SECRET / _AUTHTOKEN, and scripts/top-url-drive.mjs strips that whole
+#     variable family from every child process anyway. A rotated password or an
+#     expired TOTP secret can no longer take the site down.
+#
+#   Track 2 — .github/workflows/contentstack-periodic-entries.yml
+#     The heavy data-generation pipeline (locales, branches, workflow stage
+#     transitions, org invites, meter-coverage scenarios). Several of its steps
+#     genuinely need a user session, because Contentstack does not let a
+#     management token change workflow stages, create stacks, or invite org users.
+#     That track keeps the CONTENTSTACK_USER_* secrets.
+#
+# The two used to be one workflow: Launch warming was a late step inside Track 2,
+# so the site was only warmed when the whole heavy pipeline had already succeeded,
+# and it warmed the demo content types rather than the top-URL ones. Those two
+# warm steps now live here.
+#
+# Per GitHub Environment secrets (same names for every instance, values differ):
+#   CONTENTSTACK_MANAGEMENT_TOKEN          — required (create + publish entries)
+#   CONTENTSTACK_API_KEY | VITE_CONTENTSTACK_API_KEY  — required (stack API key)
+#   CONTENTSTACK_PUBLISH_ENVIRONMENT | VITE_CONTENTSTACK_ENVIRONMENT — required
+#   VITE_CONTENTSTACK_DELIVERY_HOST        — recommended (delivery read-back proof)
+#   VITE_CONTENTSTACK_DELIVERY_TOKEN       — recommended (same)
+#   LAUNCH_SITE_URL                        — optional; warming self-skips if unset
+#   CONTENTSTACK_MANAGEMENT_HOST, CONTENTSTACK_BRANCH, CONTENTSTACK_LOCALE — optional
+#
+# Repository Actions variables:
+#   CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON — reused, so both tracks target the
+#     same set of instances. Default if unset: ["default"]
+#   TOP_URL_ENTRY_COUNT          — rows created per run (default 5)
+#   TOP_URL_CONTENT_TYPE_UID     — default top_url_lines
+#   CONTENTSTACK_WARMUP_GET_COUNT — repeat GETs per URL in the warm step (default 100)
+
+name: Top URL site + Launch warming
+
+on:
+  schedule:
+    # Decoupled from Track 2's */5 cron on purpose — this track is cheap and its
+    # only job is keeping the site populated and warm.
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      instance:
+        description: 'GitHub Environment name to run only this instance (leave empty to run all)'
+        required: false
+        type: string
+      entry_count:
+        description: 'How many top-URL rows to create this run (default 5)'
+        required: false
+        type: string
+
+jobs:
+  top-url:
+    name: Top URL (${{ matrix.instance }})
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.instance }}
+    concurrency:
+      group: top-url-${{ matrix.instance }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        instance: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.instance || '') != '' && fromJSON(format('["{0}"]', github.event.inputs.instance)) || fromJSON(vars.CONTENTSTACK_PERIODIC_ENVIRONMENTS_JSON || '["default"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+
+      - name: Check required secrets
+        env:
+          STACK_KEY: ${{ secrets.CONTENTSTACK_API_KEY || secrets.VITE_CONTENTSTACK_API_KEY }}
+          MGMT: ${{ secrets.CONTENTSTACK_MANAGEMENT_TOKEN }}
+          PUB_ENV: ${{ secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT || secrets.VITE_CONTENTSTACK_ENVIRONMENT }}
+        run: |
+          fail=0
+          if [ -z "$STACK_KEY" ]; then
+            echo "::error::On GitHub Environment \"${{ matrix.instance }}\", add secret CONTENTSTACK_API_KEY or VITE_CONTENTSTACK_API_KEY."; fail=1
+          fi
+          if [ -z "$MGMT" ]; then
+            echo "::error::On GitHub Environment \"${{ matrix.instance }}\", add secret CONTENTSTACK_MANAGEMENT_TOKEN."; fail=1
+          fi
+          if [ -z "$PUB_ENV" ]; then
+            echo "::error::On GitHub Environment \"${{ matrix.instance }}\", add secret CONTENTSTACK_PUBLISH_ENVIRONMENT or VITE_CONTENTSTACK_ENVIRONMENT."; fail=1
+          fi
+          exit $fail
+
+      # One orchestrator: ensure the content type, create + publish the rows,
+      # read them back over the Delivery API, then warm the Launch entry pages.
+      #
+      # NOTE the absence of CONTENTSTACK_USER_* below — that is the whole point of
+      # this workflow. Do not add them.
+      - name: Run top-url track (token-only)
+        env:
+          CONTENTSTACK_API_KEY: ${{ secrets.CONTENTSTACK_API_KEY || secrets.VITE_CONTENTSTACK_API_KEY }}
+          VITE_CONTENTSTACK_API_KEY: ${{ secrets.VITE_CONTENTSTACK_API_KEY || secrets.CONTENTSTACK_API_KEY }}
+          CONTENTSTACK_MANAGEMENT_TOKEN: ${{ secrets.CONTENTSTACK_MANAGEMENT_TOKEN }}
+          CONTENTSTACK_MANAGEMENT_HOST: ${{ secrets.CONTENTSTACK_MANAGEMENT_HOST }}
+          CONTENTSTACK_BRANCH: ${{ secrets.CONTENTSTACK_BRANCH }}
+          CONTENTSTACK_LOCALE: ${{ secrets.CONTENTSTACK_LOCALE }}
+          CONTENTSTACK_PUBLISH_ENVIRONMENT: ${{ secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT || secrets.VITE_CONTENTSTACK_ENVIRONMENT }}
+          VITE_CONTENTSTACK_ENVIRONMENT: ${{ secrets.VITE_CONTENTSTACK_ENVIRONMENT || secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT }}
+          VITE_CONTENTSTACK_DELIVERY_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
+          VITE_CONTENTSTACK_DELIVERY_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
+          VITE_CONTENTSTACK_BRANCH: ${{ secrets.VITE_CONTENTSTACK_BRANCH }}
+          LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
+          LAUNCH_ENTRY_WARMUP_MAX: ${{ secrets.LAUNCH_ENTRY_WARMUP_MAX || vars.LAUNCH_ENTRY_WARMUP_MAX }}
+          TOP_URL_CONTENT_TYPE_UID: ${{ vars.TOP_URL_CONTENT_TYPE_UID }}
+          TOP_URL_WARM_CONTENT_TYPE_UIDS: ${{ vars.TOP_URL_WARM_CONTENT_TYPE_UIDS }}
+          TOP_URL_ENTRY_COUNT: ${{ github.event.inputs.entry_count || vars.TOP_URL_ENTRY_COUNT }}
+          INSTANCE: ${{ matrix.instance }}
+        run: npm run automate:top-url:ci
+
+      # Moved here from contentstack-periodic-entries.yml so cache warming no
+      # longer waits on (or dies with) the heavy data-generation pipeline.
+      - name: Warm Launch home and Delivery API (browser-equivalent GETs)
+        if: success()
+        env:
+          DEL_HOST: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_HOST }}
+          DEL_TOKEN: ${{ secrets.VITE_CONTENTSTACK_DELIVERY_TOKEN }}
+          API_KEY: ${{ secrets.VITE_CONTENTSTACK_API_KEY || secrets.CONTENTSTACK_API_KEY }}
+          ENV_ID: ${{ secrets.CONTENTSTACK_PUBLISH_ENVIRONMENT || secrets.VITE_CONTENTSTACK_ENVIRONMENT }}
+          CT_UIDS: ${{ vars.TOP_URL_WARM_CONTENT_TYPE_UIDS || vars.TOP_URL_CONTENT_TYPE_UID || 'top_url_lines' }}
+          LAUNCH_SITE_URL: ${{ secrets.LAUNCH_SITE_URL }}
+          CONTENTSTACK_WARMUP_GET_COUNT: ${{ secrets.CONTENTSTACK_WARMUP_GET_COUNT || vars.CONTENTSTACK_WARMUP_GET_COUNT }}
+        run: |
+          set -euo pipefail
+          REPEAT="${CONTENTSTACK_WARMUP_GET_COUNT:-100}"
+          case "$REPEAT" in ''|*[!0-9]*) REPEAT=100 ;; esac
+          if [ "$REPEAT" -lt 1 ]; then REPEAT=1; fi
+          echo "Warm-up: ${REPEAT} GET(s) per Launch URL and per Delivery entries URL"
+
+          if [ -z "${LAUNCH_SITE_URL:-}" ]; then
+            echo "::notice::Skipping Launch site GET: set LAUNCH_SITE_URL on GitHub Environment \"${{ matrix.instance }}\"."
+          else
+            echo "GET Launch site ×${REPEAT}: ${LAUNCH_SITE_URL}"
+            set +e
+            for ((i=1; i<=REPEAT; i++)); do
+              curl -fsSL -o /dev/null --max-time 90 "$LAUNCH_SITE_URL" \
+                || echo "::warning::Launch site GET $i/${REPEAT} failed (workflow continues)"
+            done
+            set -e
+          fi
+
+          if [ -z "${DEL_HOST:-}" ] || [ -z "${DEL_TOKEN:-}" ] || [ -z "${API_KEY:-}" ]; then
+            echo "::notice::Skipping Delivery API GETs: set VITE_CONTENTSTACK_DELIVERY_HOST, VITE_CONTENTSTACK_DELIVERY_TOKEN, and the API key secret on this environment."
+            exit 0
+          fi
+
+          HOST="${DEL_HOST%/}"
+          IFS=',' read -ra UIDS <<< "${CT_UIDS}"
+          set +e
+          for ((n=1; n<=REPEAT; n++)); do
+            for raw in "${UIDS[@]}"; do
+              uid="$(printf '%s' "$raw" | xargs)"
+              [ -z "$uid" ] && continue
+              path="${HOST}/v3/content_types/${uid}/entries"
+              if [ -n "${ENV_ID:-}" ]; then
+                path="${path}?environment=${ENV_ID}"
+              fi
+              code=$(curl -sS -o /dev/null -w "%{http_code}" \
+                -H "api_key: ${API_KEY}" \
+                -H "access_token: ${DEL_TOKEN}" \
+                "$path")
+              if [ "$code" != "200" ]; then
+                echo "::warning::Delivery GET ${uid} (round ${n}) returned HTTP ${code}"
+              else
+                echo "OK ${uid} round ${n}/${REPEAT} (HTTP ${code})"
+              fi
+            done
+          done
+          set -e
