@@ -15,10 +15,17 @@
 #     management token change workflow stages, create stacks, or invite org users.
 #     That track keeps the CONTENTSTACK_USER_* secrets.
 #
-# The two used to be one workflow: Launch warming was a late step inside Track 2,
-# so the site was only warmed when the whole heavy pipeline had already succeeded,
-# and it warmed the demo content types rather than the top-URL ones. Those two
-# warm steps now live here.
+# Launch warming runs in BOTH workflows, on purpose. Each hits one Launch page
+# per PUBLISHED entry — the app is a HashRouter, so every entry is its own page
+# at /#/entry/:contentTypeUid/:entryUid.
+#   - Track 2 warms immediately after generating, so new entries are hit while
+#     fresh. That is the original behaviour and it stays.
+#   - Track 1 warms on this independent cron, covering the top-URL content type
+#     plus the site's own list, so the site keeps being warmed even when the
+#     heavy pipeline is broken.
+# Previously warming existed ONLY inside Track 2 and was guarded by
+# `if: success()`, so a single failed generation step meant nothing was warmed at
+# all. Both tracks now use `always()` / a standalone run so that cannot recur.
 #
 # Per GitHub Environment secrets (same names for every instance, values differ):
 #   CONTENTSTACK_MANAGEMENT_TOKEN          — required (create + publish entries)

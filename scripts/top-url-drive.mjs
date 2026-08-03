@@ -14,10 +14,13 @@
  *     token change workflow stages, create stacks, or invite org users), so that
  *     track keeps CONTENTSTACK_USER_EMAIL / _PASSWORD / _TOTP_SECRET.
  *
- * The tracks were tangled before: Launch warming lived as a late step inside the
- * Track 2 GitHub workflow, so the site only got warmed when the whole heavy
- * pipeline had already succeeded, and it warmed the demo content types rather
- * than the top-URL ones. This file exists so the top-URL side stands alone again.
+ * Launch warming runs in BOTH tracks, on purpose:
+ *   - Track 2 warms right after it generates, so freshly published entries get
+ *     hit while they are new (the original behaviour, kept).
+ *   - Track 1 (this file) warms on its own cron, so the site keeps being warmed
+ *     when the heavy pipeline is failing — previously those warm steps were
+ *     guarded by `if: success()` inside Track 2, so one broken generation step
+ *     meant the site went un-warmed entirely. That was the bug.
  *
  * To make "token-only" a guarantee rather than a convention, every CONTENTSTACK_USER_*
  * variable is stripped from the child environment below. If a step in this track
@@ -65,6 +68,19 @@ function tokenOnlyEnv() {
 }
 
 const { env: BASE_ENV, stripped: STRIPPED_KEYS } = tokenOnlyEnv()
+
+/**
+ * Content types whose entry pages get warmed: the top-URL one first, then the
+ * ones the site lists, de-duplicated and order-preserving.
+ */
+function defaultWarmUids() {
+  const topUid = process.env.TOP_URL_CONTENT_TYPE_UID?.trim() || 'top_url_lines'
+  const siteUids = (process.env.VITE_CONTENTSTACK_CONTENT_TYPE_UIDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return [...new Set([topUid, ...siteUids])].join(',')
+}
 
 function runStep(name, script, extraArgs = [], extraEnv = {}) {
   const stepSlug = slug(name)
@@ -114,13 +130,18 @@ async function main() {
   //    no bootstrap run and no manifest edit.
   results.push(await runStep('top url entries', 'top-url-entries.mjs'))
 
-  // 2. Launch warming — scoped to the top-URL content type(s) rather than the
-  //    demo types. warm-launch-urls.mjs reads VITE_CONTENTSTACK_CONTENT_TYPE_UIDS,
-  //    so override it for this child only; the site's own list is untouched.
+  // 2. Launch warming — one GET per PUBLISHED entry page. The app is a
+  //    HashRouter, so every entry is its own page at
+  //    /#/entry/:contentTypeUid/:entryUid; warm-launch-urls.mjs enumerates
+  //    entries over the Delivery API and hits each one.
+  //
+  //    Default coverage is the top-URL content type PLUS whatever the site
+  //    itself lists (VITE_CONTENTSTACK_CONTENT_TYPE_UIDS), so this standalone
+  //    run hits every published entry page even when the Track 2 data-gen
+  //    workflow — which also warms, right after it generates — is failing.
+  //    The overlap between the two tracks is intentional.
   const warmUids =
-    process.env.TOP_URL_WARM_CONTENT_TYPE_UIDS ||
-    process.env.TOP_URL_CONTENT_TYPE_UID ||
-    'top_url_lines'
+    process.env.TOP_URL_WARM_CONTENT_TYPE_UIDS || defaultWarmUids()
   results.push(
     await runStep('warm launch urls', 'warm-launch-urls.mjs', [], {
       VITE_CONTENTSTACK_CONTENT_TYPE_UIDS: warmUids,
